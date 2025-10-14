@@ -1,0 +1,544 @@
+{% extends 'student_base.html' %}
+
+{% block title %}{{ announcement.title }} - Faculty Management System{% endblock %}
+
+{% block page_title %}Announcement Details{% endblock %}
+
+{% block extra_css %}
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        background: transparent;
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .announcement-header {
+        border-bottom: 2px solid #F1F5F9;
+        padding-bottom: 20px;
+        margin-bottom: 30px;
+    }
+
+    .announcement-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 16px;
+        line-height: 1.3;
+    }
+
+    .announcement-meta {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #64748B;
+        font-size: 14px;
+    }
+
+    .meta-item i {
+        font-size: 16px;
+    }
+
+    .priority-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .priority-LOW {
+        background: #E0E7FF;
+        color: #3730A3;
+    }
+
+    .priority-NORMAL {
+        background: #DBEAFE;
+        color: #1E40AF;
+    }
+
+    .priority-HIGH {
+        background: #FED7AA;
+        color: #C2410C;
+    }
+
+    .priority-URGENT {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+
+    .announcement-content {
+        font-size: 15px;
+        line-height: 1.8;
+        color: #334155;
+        margin-bottom: 30px;
+    }
+
+    .announcement-content p {
+        margin-bottom: 16px;
+    }
+
+    .announcement-content h1,
+    .announcement-content h2,
+    .announcement-content h3 {
+        color: #1E293B;
+        margin-top: 24px;
+        margin-bottom: 12px;
+    }
+
+    .announcement-content ul,
+    .announcement-content ol {
+        margin-bottom: 16px;
+        padding-left: 24px;
+    }
+
+    .announcement-content li {
+        margin-bottom: 8px;
+    }
+
+    .info-banner {
+        background: #F0F9FF;
+        border-left: 4px solid #0EA5E9;
+        padding: 16px 20px;
+        border-radius: 5px;
+        margin-bottom: 30px;
+    }
+
+    .info-banner-content {
+        display: flex;
+        align-items: start;
+        gap: 12px;
+    }
+
+    .info-banner-icon {
+        color: #0EA5E9;
+        font-size: 20px;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .info-banner-text {
+        color: #0C4A6E;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .warning-banner {
+        background: #FFFBEB;
+        border-left: 4px solid #F59E0B;
+    }
+
+    .warning-banner .info-banner-icon {
+        color: #F59E0B;
+    }
+
+    .warning-banner .info-banner-text {
+        color: #78350F;
+    }
+
+    .attachment-section {
+        background: #F8FAFC;
+        border-radius: 5px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+
+    .attachment-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .attachment-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: white;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        transition: all 0.3s ease;
+    }
+
+    .attachment-item:hover {
+        border-color: #4F46E5;
+        transform: translateX(4px);
+    }
+
+    .attachment-icon {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 18px;
+    }
+
+    .attachment-info {
+        flex: 1;
+    }
+
+    .attachment-name {
+        font-weight: 600;
+        color: #1E293B;
+        font-size: 14px;
+        margin-bottom: 2px;
+    }
+
+    .attachment-size {
+        color: #64748B;
+        font-size: 12px;
+    }
+
+    .attachment-link {
+        color: #4F46E5;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .attachment-link:hover {
+        color: #4338CA;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 30px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+        transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+        background: #F1F5F9;
+        color: #64748B;
+    }
+
+    .btn-secondary:hover {
+        background: #E2E8F0;
+    }
+
+    .related-section {
+        background: white;
+        border-radius: 5px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        border: 1px solid #f0f0f0;
+    }
+
+    .related-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .related-item {
+        padding: 12px;
+        border-bottom: 1px solid #F1F5F9;
+        transition: background 0.3s ease;
+    }
+
+    .related-item:last-child {
+        border-bottom: none;
+    }
+
+    .related-item:hover {
+        background: #F8FAFC;
+    }
+
+    .related-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+
+    .related-item-title {
+        font-weight: 600;
+        color: #1E293B;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .related-item-date {
+        color: #94A3B8;
+        font-size: 12px;
+    }
+
+    .empty-related {
+        text-align: center;
+        padding: 30px 20px;
+        color: #94A3B8;
+        font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+        .section-container {
+            padding: 20px;
+        }
+
+        .announcement-title {
+            font-size: 22px;
+        }
+
+        .announcement-meta {
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'student_announcements_list' %}">Announcements</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ announcement.title|truncatewords:5 }}</li>
+    </ol>
+</nav>
+
+<!-- Main Announcement Content -->
+<div class="section-container">
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <a href="{% url 'student_announcements_list' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Announcements
+        </a>
+        <button onclick="window.print()" class="btn btn-secondary">
+            <i class="bi bi-printer"></i> Print
+        </button>
+    </div>
+
+    <!-- Announcement Header -->
+    <div class="announcement-header">
+        <h1 class="announcement-title">{{ announcement.title }}</h1>
+        <div class="announcement-meta">
+            <span class="priority-badge priority-{{ announcement.priority }}">
+                {{ announcement.get_priority_display }}
+            </span>
+            <span class="meta-item">
+                <i class="bi bi-calendar3"></i>
+                Published {{ announcement.publish_date|date:"d F Y" }}
+            </span>
+            <span class="meta-item">
+                <i class="bi bi-clock"></i>
+                {{ announcement.publish_date|date:"H:i" }}
+            </span>
+            <span class="meta-item">
+                <i class="bi bi-person"></i>
+                {{ announcement.created_by.get_full_name }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Expiry Warning -->
+    {% if announcement.expiry_date %}
+    <div class="info-banner warning-banner">
+        <div class="info-banner-content">
+            <i class="bi bi-hourglass-split info-banner-icon"></i>
+            <div class="info-banner-text">
+                <strong>Expiry Notice:</strong> This announcement will expire on {{ announcement.expiry_date|date:"d F Y" }}.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Programme Info -->
+    {% if announcement.target_programmes.exists %}
+    <div class="info-banner">
+        <div class="info-banner-content">
+            <i class="bi bi-info-circle-fill info-banner-icon"></i>
+            <div class="info-banner-text">
+                <strong>Programme Specific:</strong> This announcement is targeted to 
+                {% for programme in announcement.target_programmes.all %}
+                    {{ programme.name }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Announcement Content -->
+    <div class="announcement-content">
+        {{ announcement.content|linebreaks }}
+    </div>
+
+    <!-- Attachments -->
+    {% if announcement.attachments %}
+    <div class="attachment-section">
+        <div class="attachment-title">
+            <i class="bi bi-paperclip"></i>
+            Attachments
+        </div>
+        <div class="attachment-item">
+            <div class="attachment-icon">
+                <i class="bi bi-file-earmark"></i>
+            </div>
+            <div class="attachment-info">
+                <div class="attachment-name">{{ announcement.attachments.name }}</div>
+                <div class="attachment-size">Download attachment</div>
+            </div>
+            <a href="{{ announcement.attachments.url }}" class="attachment-link" download>
+                <i class="bi bi-download"></i> Download
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Footer Info -->
+    <div style="border-top: 2px solid #F1F5F9; padding-top: 20px; margin-top: 30px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div style="color: #94A3B8; font-size: 13px;">
+                <i class="bi bi-clock-history"></i> Posted {{ announcement.created_at|timesince }} ago
+            </div>
+            {% if announcement.target_year_levels %}
+            <div style="color: #64748B; font-size: 13px;">
+                <i class="bi bi-mortarboard"></i> 
+                Target Years: {{ announcement.target_year_levels }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Related Announcements -->
+{% if related_announcements %}
+<div class="related-section">
+    <h3 class="related-title">
+        <i class="bi bi-collection"></i>
+        Related Announcements
+    </h3>
+    {% for related in related_announcements %}
+    <div class="related-item">
+        <a href="{% url 'student_announcement_detail' related.pk %}" class="related-link">
+            <div class="related-item-title">{{ related.title }}</div>
+            <div class="related-item-date">
+                <i class="bi bi-calendar3"></i> {{ related.publish_date|date:"d M Y" }}
+                <span class="priority-badge priority-{{ related.priority }}" style="margin-left: 10px; font-size: 10px; padding: 3px 8px;">
+                    {{ related.get_priority_display }}
+                </span>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="related-section">
+    <h3 class="related-title">
+        <i class="bi bi-collection"></i>
+        Related Announcements
+    </h3>
+    <div class="empty-related">
+        <i class="bi bi-inbox" style="font-size: 32px; display: block; margin-bottom: 8px;"></i>
+        No related announcements at this time
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    console.log('Announcement detail loaded');
+    
+    // Add smooth scroll to top button
+    window.addEventListener('scroll', function() {
+        if (window.pageYOffset > 100) {
+            document.body.style.paddingBottom = '60px';
+        } else {
+            document.body.style.paddingBottom = '0';
+        }
+    });
+</script>
+{% endblock %}
