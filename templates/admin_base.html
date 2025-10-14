@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Faculty Management System{% endblock %}</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #4F46E5;
+            --primary-hover: #4338CA;
+            --sidebar-bg: #1E293B;
+            --sidebar-hover: #334155;
+            --main-bg: #F8FAFC;
+            --card-bg: #FFFFFF;
+            --text-primary: #1E293B;
+            --text-secondary: #64748B;
+            --border-color: #E2E8F0;
+            --success-color: #10B981;
+            --danger-color: #EF4444;
+            --warning-color: #F59E0B;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--main-bg);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            padding: 20px 0;
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            padding: 0 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color), #6366F1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+        }
+
+        .logo i {
+            color: white;
+            font-size: 20px;
+        }
+
+        .logo-text {
+            color: white;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .menu-section {
+            margin-bottom: 30px;
+        }
+
+        .menu-title {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0 20px;
+            margin-bottom: 10px;
+        }
+
+        .menu-item {
+            padding: 12px 20px;
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .menu-item:hover {
+            background-color: var(--sidebar-hover);
+            color: white;
+        }
+
+        .menu-item.active {
+            background-color: var(--sidebar-hover);
+            color: white;
+            border-left: 3px solid var(--primary-color);
+        }
+
+        .menu-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 16px;
+        }
+
+        .menu-item .badge {
+            margin-left: auto;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .menu-item .arrow {
+            margin-left: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .menu-item.has-submenu.open .arrow {
+            transform: rotate(90deg);
+        }
+
+        .submenu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+
+        .submenu.open {
+            max-height: 500px;
+        }
+
+        .submenu-item {
+            padding: 10px 20px 10px 52px;
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            display: block;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .submenu-item:hover {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            transition: margin-left 0.3s ease;
+            min-height: 100vh;
+        }
+
+        .main-content.expanded {
+            margin-left: 0;
+        }
+
+        /* Header */
+        .header {
+            background-color: var(--card-bg);
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .menu-toggle {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .menu-toggle:hover {
+            background-color: var(--main-bg);
+        }
+
+        .search-bar {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-bar input {
+            padding: 10px 40px 10px 40px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 400px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .search-bar input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .search-bar i {
+            position: absolute;
+            left: 15px;
+            color: var(--text-secondary);
+        }
+
+        .search-bar .shortcut {
+            position: absolute;
+            right: 15px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            background-color: var(--main-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .header-icon:hover {
+            background-color: var(--main-bg);
+        }
+
+        .header-icon i {
+            font-size: 18px;
+            color: var(--text-primary);
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            background-color: var(--danger-color);
+            border-radius: 50%;
+            border: 2px solid var(--card-bg);
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            padding: 6px 12px 6px 6px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .user-profile:hover {
+            background-color: var(--main-bg);
+        }
+
+        .user-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .user-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .user-role {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Content Area */
+        .content {
+            padding: 30px;
+        }
+
+        .page-header {
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .breadcrumb {
+            display: flex;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .breadcrumb a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            color: var(--primary-color);
+        }
+
+        /* Mobile Overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .search-bar input {
+                width: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .search-bar {
+                display: none;
+            }
+
+            .header {
+                padding: 15px 20px;
+            }
+
+            .content {
+                padding: 20px 15px;
+            }
+
+            .user-info {
+                display: none;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header-icon:not(.notification-icon) {
+                display: none;
+            }
+
+            .page-title {
+                font-size: 22px;
+            }
+        }
+
+        /* Scrollbar Styling */
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <i class="fas fa-graduation-cap"></i>
+            </div>
+            <span class="logo-text">FacultyMS</span>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-title">Main Menu</div>
+            <a href="#" class="menu-item active">
+                <i class="fas fa-home"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Academic Calendar</span>
+            </a>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-title">Academic</div>
+            
+            <div class="menu-item has-submenu" data-submenu="students">
+                <i class="fas fa-user-graduate"></i>
+                <span>Students</span>
+                <i class="fas fa-chevron-right arrow"></i>
+            </div>
+            <div class="submenu" id="submenu-students">
+                <a href="#" class="submenu-item">All Students</a>
+                <a href="#" class="submenu-item">Add New Student</a>
+                <a href="#" class="submenu-item">Student Progression</a>
+                <a href="#" class="submenu-item">Enrollment Management</a>
+            </div>
+
+            <div class="menu-item has-submenu" data-submenu="lecturers">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <span>Lecturers</span>
+                <i class="fas fa-chevron-right arrow"></i>
+            </div>
+            <div class="submenu" id="submenu-lecturers">
+                <a href="#" class="submenu-item">All Lecturers</a>
+                <a href="#" class="submenu-item">Add New Lecturer</a>
+                <a href="#" class="submenu-item">Unit Allocations</a>
+            </div>
+
+            <div class="menu-item has-submenu" data-submenu="programmes">
+                <i class="fas fa-book"></i>
+                <span>Programmes</span>
+                <i class="fas fa-chevron-right arrow"></i>
+            </div>
+            <div class="submenu" id="submenu-programmes">
+                <a href="#" class="submenu-item">All Programmes</a>
+                <a href="#" class="submenu-item">Programme Units</a>
+                <a href="#" class="submenu-item">Departments</a>
+            </div>
+
+            <div class="menu-item has-submenu" data-submenu="units">
+                <i class="fas fa-book-open"></i>
+                <span>Units</span>
+                <i class="fas fa-chevron-right arrow"></i>
+            </div>
+            <div class="submenu" id="submenu-units">
+                <a href="#" class="submenu-item">All Units</a>
+                <a href="#" class="submenu-item">Add New Unit</a>
+                <a href="#" class="submenu-item">Unit Enrollments</a>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-title">Assessment</div>
+            
+            <div class="menu-item has-submenu" data-submenu="grading">
+                <i class="fas fa-clipboard-list"></i>
+                <span>Grading</span>
+                <i class="fas fa-chevron-right arrow"></i>
+            </div>
+            <div class="submenu" id="submenu-grading">
+                <a href="#" class="submenu-item">Enter Marks</a>
+                <a href="#" class="submenu-item">Final Grades</a>
+                <a href="#" class="submenu-item">Grading Schemes</a>
+                <a href="#" class="submenu-item">Assessment Components</a>
+            </div>
+
+            <a href="#" class="menu-item">
+                <i class="fas fa-chart-line"></i>
+                <span>Reports</span>
+            </a>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-title">Management</div>
+            
+            <div class="menu-item has-submenu" data-submenu="timetable">
+                <i class="fas fa-clock"></i>
+                <span>Timetable</span>
+                <i class="fas fa-chevron-right arrow"></i>
+            </div>
+            <div class="submenu" id="submenu-timetable">
+                <a href="#" class="submenu-item">View Timetable</a>
+                <a href="#" class="submenu-item">Create Timetable</a>
+                <a href="#" class="submenu-item">Venues</a>
+            </div>
+
+            <div class="menu-item has-submenu" data-submenu="fees">
+                <i class="fas fa-dollar-sign"></i>
+                <span>Fees Management</span>
+                <i class="fas fa-chevron-right arrow"></i>
+            </div>
+            <div class="submenu" id="submenu-fees">
+                <a href="#" class="submenu-item">Fee Structure</a>
+                <a href="#" class="submenu-item">Fee Payments</a>
+                <a href="#" class="submenu-item">Fee Statements</a>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-title">Communication</div>
+            
+            <a href="#" class="menu-item">
+                <i class="fas fa-bullhorn"></i>
+                <span>Announcements</span>
+                <span class="badge">3</span>
+            </a>
+
+            <a href="#" class="menu-item">
+                <i class="fas fa-calendar-check"></i>
+                <span>Events</span>
+            </a>
+
+            <a href="#" class="menu-item">
+                <i class="fas fa-envelope"></i>
+                <span>Messages</span>
+                <span class="badge">12</span>
+            </a>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-title">System</div>
+            
+            <a href="#" class="menu-item">
+                <i class="fas fa-users-cog"></i>
+                <span>User Management</span>
+            </a>
+
+            <a href="#" class="menu-item">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <button class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search or type command...">
+                    <span class="shortcut">⌘K</span>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div class="header-icon">
+                    <i class="fas fa-moon"></i>
+                </div>
+                <div class="header-icon notification-icon">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge"></span>
+                </div>
+                <div class="user-profile">
+                    <img src="https://ui-avatars.com/api/?name=Admin+User&background=4F46E5&color=fff" alt="User" class="user-avatar">
+                    <div class="user-info">
+                        <span class="user-name">{{ user.get_full_name|default:"Admin User" }}</span>
+                        <span class="user-role">{{ user.get_user_type_display|default:"Administrator" }}</span>
+                    </div>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            {% block content %}
+            <div class="page-header">
+                <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+                <div class="breadcrumb">
+                    <a href="#">Home</a>
+                    <span>/</span>
+                    <span>{% block breadcrumb %}Dashboard{% endblock %}</span>
+                </div>
+            </div>
+
+            <!-- Your content goes here -->
+            {% endblock %}
+        </div>
+    </div>
+
+    <script>
+        // Toggle Sidebar
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('mainContent');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+        menuToggle.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+            } else {
+                sidebar.classList.toggle('collapsed');
+                mainContent.classList.toggle('expanded');
+            }
+        });
+
+        // Close sidebar when clicking overlay
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.remove('active');
+            sidebarOverlay.classList.remove('active');
+        });
+
+        // Submenu Toggle
+        const menuItems = document.querySelectorAll('.menu-item.has-submenu');
+        
+        menuItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const submenuId = item.getAttribute('data-submenu');
+                const submenu = document.getElementById(`submenu-${submenuId}`);
+                
+                // Close other submenus
+                document.querySelectorAll('.submenu').forEach(sub => {
+                    if (sub !== submenu) {
+                        sub.classList.remove('open');
+                    }
+                });
+                
+                document.querySelectorAll('.menu-item.has-submenu').forEach(mi => {
+                    if (mi !== item) {
+                        mi.classList.remove('open');
+                    }
+                });
+                
+                // Toggle current submenu
+                item.classList.toggle('open');
+                submenu.classList.toggle('open');
+            });
+        });
+
+        // Active menu item
+        const allMenuItems = document.querySelectorAll('.menu-item:not(.has-submenu), .submenu-item');
+        
+        allMenuItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (!item.classList.contains('has-submenu')) {
+                    allMenuItems.forEach(mi => mi.classList.remove('active'));
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('active');
+                sidebarOverlay.classList.remove('active');
+            }
+        });
+
+        // Search bar functionality
+        const searchInput = document.querySelector('.search-bar input');
+        
+        // Keyboard shortcut (Cmd/Ctrl + K)
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                searchInput.focus();
+            }
+        });
+
+        // Dark mode toggle (placeholder)
+        const darkModeToggle = document.querySelector('.header-icon:first-child');
+        darkModeToggle.addEventListener('click', () => {
+            // Add dark mode functionality here
+            console.log('Dark mode toggle clicked');
+        });
+
+        // Notification icon click
+        const notificationIcon = document.querySelector('.notification-icon');
+        notificationIcon.addEventListener('click', () => {
+            // Add notification dropdown functionality here
+            console.log('Notifications clicked');
+        });
+
+        // User profile click
+        const userProfile = document.querySelector('.user-profile');
+        userProfile.addEventListener('click', () => {
+            // Add user profile dropdown functionality here
+            console.log('User profile clicked');
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
