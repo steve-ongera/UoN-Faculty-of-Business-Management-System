@@ -534,21 +534,21 @@
 
         <div class="menu-section">
             <div class="menu-title">Main Menu</div>
-            <a href="{% url 'student_dashboard'%}" class="menu-item active">
+            <a href="{% url 'student_dashboard' %}" class="menu-item {% if request.resolver_match.url_name == 'student_dashboard' %}active{% endif %}">
                 <i class="fas fa-home"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="{% url 'student_announcements_list'%}" class="menu-item">
+            <a href="{% url 'student_announcements_list' %}" class="menu-item {% if request.resolver_match.url_name == 'student_announcements_list' %}active{% endif %}">
                 <i class="fas fa-bullhorn"></i>
                 <span>Announcements</span>
                 <span class="badge">3</span>
             </a>
 
-            <a href="{% url 'student_events_list'%}" class="menu-item">
+            <a href="{% url 'student_events_list' %}" class="menu-item {% if request.resolver_match.url_name == 'student_events_list' %}active{% endif %}">
                 <i class="fas fa-calendar-check"></i>
                 <span>Events</span>
             </a>
-            <a href="{% url 'student_academic_calendar'%}" class="menu-item">
+            <a href="{% url 'student_academic_calendar' %}" class="menu-item {% if request.resolver_match.url_name == 'student_academic_calendar' %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i>
                 <span>Academic Calendar</span>
             </a>
@@ -557,79 +557,76 @@
         <div class="menu-section">
             <div class="menu-title">Academic</div>
             
-            <a href="{% url 'student_semester_reporting'%}" class="menu-item">
+            <a href="{% url 'student_semester_reporting' %}" class="menu-item {% if request.resolver_match.url_name == 'student_semester_reporting' %}active{% endif %}">
                 <i class="fas fa-book"></i>
                 <span>Reporting</span>
             </a>
 
-            <a href="{% url 'my_programme'%}" class="menu-item">
+            <a href="{% url 'my_programme' %}" class="menu-item {% if request.resolver_match.url_name == 'my_programme' %}active{% endif %}">
                 <i class="fas fa-user-graduate"></i>
                 <span>My Programme</span>
             </a>
 
-            <div class="menu-item has-submenu" data-submenu="enrollment">
+            <div class="menu-item has-submenu {% if 'register_units' in request.resolver_match.url_name or 'student_enrollments' in request.resolver_match.url_name %}active{% endif %}" data-submenu="enrollment">
                 <i class="fas fa-clipboard-check"></i>
                 <span>Enrollment</span>
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-enrollment">
-                <a href="{% url 'register_units'%}" class="submenu-item">Register Units</a>
-                <a href="{% url 'student_enrollments'%}" class="submenu-item">My Enrollments</a>
-           
+                <a href="{% url 'register_units' %}" class="submenu-item {% if request.resolver_match.url_name == 'register_units' %}active{% endif %}">Register Units</a>
+                <a href="{% url 'student_enrollments' %}" class="submenu-item {% if request.resolver_match.url_name == 'student_enrollments' %}active{% endif %}">My Enrollments</a>
             </div>
         </div>
 
         <div class="menu-section">
             <div class="menu-title">Assessment</div>
             
-            <a href="#" class="menu-item">
+            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'student_grades' %}active{% endif %}">
                 <i class="fas fa-star"></i>
                 <span>My Grades</span>
             </a>
 
-            <a href="#" class="menu-item">
+            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'academic_performance' %}active{% endif %}">
                 <i class="fas fa-chart-line"></i>
                 <span>Academic Performance</span>
             </a>
 
-            <div class="menu-item has-submenu" data-submenu="results">
+            <div class="menu-item has-submenu {% if 'transcript' in request.resolver_match.url_name or 'grade_reports' in request.resolver_match.url_name or 'certificate' in request.resolver_match.url_name %}active{% endif %}" data-submenu="results">
                 <i class="fas fa-file-alt"></i>
                 <span>Results</span>
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-results">
-                <a href="#" class="submenu-item">View Transcript</a>
-                <a href="#" class="submenu-item">Grade Reports</a>
-                <a href="#" class="submenu-item">Download Certificate</a>
+                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'view_transcript' %}active{% endif %}">View Transcript</a>
+                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'grade_reports' %}active{% endif %}">Grade Reports</a>
+                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'download_certificate' %}active{% endif %}">Download Certificate</a>
             </div>
         </div>
 
         <div class="menu-section">
             <div class="menu-title">Management</div>
             
-            <a href="{% url 'student_timetable'%}" class="menu-item">
+            <a href="{% url 'student_timetable' %}" class="menu-item {% if request.resolver_match.url_name == 'student_timetable' %}active{% endif %}">
                 <i class="fas fa-clock"></i>
                 <span>Timetable</span>
             </a>
 
-            <div class="menu-item has-submenu" data-submenu="fees">
+            <div class="menu-item has-submenu {% if 'fees' in request.resolver_match.url_name %}active{% endif %}" data-submenu="fees">
                 <i class="fas fa-dollar-sign"></i>
                 <span>Fees</span>
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-fees">
-                <a href="#" class="submenu-item">Fee Statement</a>
-                <a href="#" class="submenu-item">Payment History</a>
-                <a href="#" class="submenu-item">Make Payment</a>
+                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'fee_statement' %}active{% endif %}">Fee Statement</a>
+                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'payment_history' %}active{% endif %}">Payment History</a>
+                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'make_payment' %}active{% endif %}">Make Payment</a>
             </div>
         </div>
 
         <div class="menu-section">
             <div class="menu-title">Communication</div>
             
-            
-
-            <a href="{% url 'messaging_list'%}" class="menu-item">
+            <a href="{% url 'messaging_list' %}" class="menu-item {% if request.resolver_match.url_name == 'messaging_list' %}active{% endif %}">
                 <i class="fas fa-envelope"></i>
                 <span>Messages</span>
                 <span class="badge">5</span>
@@ -639,22 +636,23 @@
         <div class="menu-section">
             <div class="menu-title">Account</div>
             
-            <a href="{% url 'student_profile'%}" class="menu-item">
+            <a href="{% url 'student_profile' %}" class="menu-item {% if request.resolver_match.url_name == 'student_profile' %}active{% endif %}">
                 <i class="fas fa-user-circle"></i>
                 <span>My Profile</span>
             </a>
 
-            <a href="#" class="menu-item">
+            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
                 <i class="fas fa-cog"></i>
                 <span>Settings</span>
             </a>
 
-            <a href="{% url 'logout'%}" class="menu-item">
+            <a href="{% url 'logout' %}" class="menu-item">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Logout</span>
             </a>
         </div>
     </div>
+    <!--end sidebar-->
 
     <!-- Main Content -->
     <div class="main-content" id="mainContent">
