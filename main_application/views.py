@@ -1046,3 +1046,75 @@ def drop_unit(request, enrollment_id):
     
     messages.success(request, f"Successfully dropped {unit_code} - {unit_name}.")
     return redirect('student_enrollments')
+
+
+# views.py - Student Programme Curriculum View
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from .models import Student, ProgrammeUnit, Unit
+
+
+@login_required(login_url='login')
+def my_programme(request):
+    """View the complete curriculum of student's programme"""
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    programme = student.programme
+    
+    # Get all programme units organized by year and semester
+    programme_units = ProgrammeUnit.objects.filter(
+        programme=programme
+    ).select_related('unit').order_by('year_level', 'semester')
+    
+    # Organize by year and semester
+    curriculum_by_year = {}
+    for program_unit in programme_units:
+        year_level = program_unit.year_level
+        semester = program_unit.semester
+        
+        if year_level not in curriculum_by_year:
+            curriculum_by_year[year_level] = {
+                'year_label': f'Year {year_level}',
+                'semesters': {}
+            }
+        
+        if semester not in curriculum_by_year[year_level]['semesters']:
+            curriculum_by_year[year_level]['semesters'][semester] = {
+                'semester_label': f'Semester {semester}',
+                'mandatory_units': [],
+                'elective_units': [],
+                'total_credits': 0
+            }
+        
+        semester_data = curriculum_by_year[year_level]['semesters'][semester]
+        
+        if program_unit.is_mandatory:
+            semester_data['mandatory_units'].append(program_unit)
+        else:
+            semester_data['elective_units'].append(program_unit)
+        
+        semester_data['total_credits'] += program_unit.unit.credit_hours
+    
+    # Calculate programme statistics
+    total_units = programme_units.count()
+    total_credits = sum(pu.unit.credit_hours for pu in programme_units)
+    mandatory_units = programme_units.filter(is_mandatory=True).count()
+    elective_units = programme_units.filter(is_mandatory=False).count()
+    
+    context = {
+        'programme': programme,
+        'curriculum_by_year': curriculum_by_year,
+        'total_units': total_units,
+        'total_credits': total_credits,
+        'mandatory_units': mandatory_units,
+        'elective_units': elective_units,
+        'programme_duration': programme.duration_years,
+        'semesters_per_year': programme.semesters_per_year,
+    }
+    
+    return render(request, 'student/programme/view_curriculum.html', context)

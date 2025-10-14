@@ -24,5 +24,6 @@ urlpatterns = [
     path('units/register/', views.register_units, name='register_units'),
     path('units/enrollments/', views.student_enrollments, name='student_enrollments'),
     path('units/<int:enrollment_id>/drop/', views.drop_unit, name='drop_unit'),
+    path('my_programme/', views.my_programme, name='my_programme'),
 
 ]

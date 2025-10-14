@@ -1,0 +1,680 @@
+
+
+{% extends 'student_base.html' %}
+
+{% block title %}Programme Curriculum - Faculty Management System{% endblock %}
+
+{% block page_title %}My Programme Curriculum{% endblock %}
+
+{% block extra_css %}
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+        position: relative;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .header-section {
+        margin-bottom: 30px;
+        padding-bottom: 24px;
+        border-bottom: 2px solid #F1F5F9;
+    }
+
+    .header-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .header-title i {
+        color: #4F46E5;
+        font-size: 28px;
+    }
+
+    .programme-info {
+        font-size: 15px;
+        color: #64748B;
+        margin-bottom: 16px;
+    }
+
+    .programme-info strong {
+        color: #1E293B;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+        border: 2px solid #E0E7FF;
+        border-radius: 8px;
+        padding: 16px;
+    }
+
+    .stat-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748B;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #4F46E5;
+    }
+
+    .stat-sub {
+        font-size: 11px;
+        color: #94A3B8;
+        margin-top: 4px;
+    }
+
+    /* Year Tabs */
+    .year-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 2px solid #F1F5F9;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .year-tab {
+        padding: 10px 20px;
+        background: #F1F5F9;
+        border: 2px solid #E2E8F0;
+        border-radius: 6px;
+        color: #64748B;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .year-tab:hover {
+        border-color: #4F46E5;
+        color: #4F46E5;
+    }
+
+    .year-tab.active {
+        background: linear-gradient(135deg, #4F46E5, #7C3AED);
+        color: white;
+        border-color: #4F46E5;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    }
+
+    .year-content {
+        display: none;
+    }
+
+    .year-content.active {
+        display: block;
+        animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Semester Tabs (Horizontal) */
+    .semester-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 20px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 8px;
+    }
+
+    .semester-tab {
+        padding: 8px 16px;
+        background: #F8FAFC;
+        border: 2px solid #E2E8F0;
+        border-radius: 6px;
+        color: #64748B;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .semester-tab:hover {
+        border-color: #7C3AED;
+        color: #7C3AED;
+    }
+
+    .semester-tab.active {
+        background: #7C3AED;
+        color: white;
+        border-color: #7C3AED;
+        box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+    }
+
+    .semester-content {
+        display: none;
+    }
+
+    .semester-content.active {
+        display: block;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .semester-header {
+        background: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        border-left: 4px solid #7C3AED;
+    }
+
+    .semester-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .semester-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #1E293B;
+    }
+
+    .semester-credits {
+        background: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #7C3AED;
+    }
+
+    /* Units Grid */
+    .units-grid {
+        display: grid;
+        gap: 12px;
+    }
+
+    .unit-card {
+        background: white;
+        border: 2px solid #E2E8F0;
+        border-radius: 8px;
+        padding: 16px;
+        transition: all 0.3s ease;
+    }
+
+    .unit-card:hover {
+        border-color: #4F46E5;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .unit-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+
+    .unit-code {
+        font-size: 12px;
+        font-weight: 700;
+        color: white;
+        background: #4F46E5;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .unit-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: #1E293B;
+        flex: 1;
+    }
+
+    .unit-badges {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .unit-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-mandatory {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+
+    .badge-elective {
+        background: #E0F2FE;
+        color: #0369A1;
+    }
+
+    .unit-meta {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: #64748B;
+        flex-wrap: wrap;
+    }
+
+    .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .meta-item i {
+        color: #4F46E5;
+    }
+
+    .unit-description {
+        font-size: 13px;
+        color: #64748B;
+        line-height: 1.5;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #F1F5F9;
+    }
+
+    .section-divider {
+        margin: 20px 0;
+        padding: 16px;
+        background: #F8FAFC;
+        border-radius: 8px;
+        border-left: 3px solid #7C3AED;
+    }
+
+    .section-divider-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1E293B;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: #CBD5E1;
+        margin-bottom: 12px;
+    }
+
+    .empty-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #64748B;
+        margin-bottom: 8px;
+    }
+
+    .empty-text {
+        font-size: 14px;
+        color: #94A3B8;
+    }
+
+    @media (max-width: 768px) {
+        .section-container {
+            padding: 20px;
+        }
+
+        .header-title {
+            font-size: 20px;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .year-tabs,
+        .semester-tabs {
+            gap: 6px;
+        }
+
+        .year-tab,
+        .semester-tab {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        .unit-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .unit-name {
+            flex: none;
+        }
+
+        .semester-info {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Programme Curriculum</li>
+    </ol>
+</nav>
+
+<div class="section-container">
+    <!-- Header -->
+    <div class="header-section">
+        <h1 class="header-title">
+            <i class="bi bi-book"></i> Programme Curriculum
+        </h1>
+        <div class="programme-info">
+            <strong>{{ programme.name }}</strong> ({{ programme.code }})
+            <br>
+            <span style="font-size: 13px;">{{ programme.get_level_display }} • {{ programme.duration_years }}-Year Programme</span>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">
+                    <i class="bi bi-book-fill"></i> Total Units
+                </div>
+                <div class="stat-value">{{ total_units }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">
+                    <i class="bi bi-mortarboard"></i> Total Credits
+                </div>
+                <div class="stat-value">{{ total_credits }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">
+                    <i class="bi bi-star-fill"></i> Mandatory
+                </div>
+                <div class="stat-value">{{ mandatory_units }}</div>
+                <div class="stat-sub">{{ elective_units }} Elective</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">
+                    <i class="bi bi-calendar-range"></i> Duration
+                </div>
+                <div class="stat-value">{{ programme_duration }}</div>
+                <div class="stat-sub">years</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Year Tabs -->
+    <div class="year-tabs">
+        {% for year_level, year_data in curriculum_by_year.items %}
+        <button 
+            type="button" 
+            class="year-tab {% if forloop.first %}active{% endif %}"
+            onclick="switchYear(this, 'year-{{ year_level }}')">
+            <i class="bi bi-bookmark"></i> {{ year_data.year_label }}
+        </button>
+        {% endfor %}
+    </div>
+
+    <!-- Year Contents -->
+    {% for year_level, year_data in curriculum_by_year.items %}
+    <div id="year-{{ year_level }}" class="year-content {% if forloop.first %}active{% endif %}">
+        
+        <!-- Semester Tabs -->
+        <div class="semester-tabs">
+            {% for semester_num, semester_data in year_data.semesters.items %}
+            <button 
+                type="button" 
+                class="semester-tab {% if forloop.first %}active{% endif %}"
+                onclick="switchSemester(this, 'sem-{{ year_level }}-{{ semester_num }}')">
+                <i class="bi bi-hourglass-split"></i> Semester {{ semester_num }}
+            </button>
+            {% endfor %}
+        </div>
+
+        <!-- Semester Contents -->
+        {% for semester_num, semester_data in year_data.semesters.items %}
+        <div id="sem-{{ year_level }}-{{ semester_num }}" class="semester-content {% if forloop.first %}active{% endif %}">
+            
+            <!-- Semester Header -->
+            <div class="semester-header">
+                <div class="semester-info">
+                    <span class="semester-title">
+                        <i class="bi bi-hourglass-split"></i> {{ semester_data.semester_label }} - {{ year_data.year_label }}
+                    </span>
+                    <span class="semester-credits">
+                        <i class="bi bi-star"></i> {{ semester_data.total_credits }} Credits
+                    </span>
+                </div>
+            </div>
+
+            <!-- Mandatory Units Section -->
+            {% if semester_data.mandatory_units %}
+            <div class="units-grid">
+                {% if semester_data.elective_units %}
+                <div class="section-divider">
+                    <div class="section-divider-title">
+                        <i class="bi bi-star-fill"></i> Mandatory Units
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% for program_unit in semester_data.mandatory_units %}
+                <div class="unit-card">
+                    <div class="unit-header">
+                        <span class="unit-code">{{ program_unit.unit.code }}</span>
+                        <span class="unit-name">{{ program_unit.unit.name }}</span>
+                        <div class="unit-badges">
+                            <span class="unit-badge badge-mandatory">
+                                <i class="bi bi-star-fill"></i> Mandatory
+                            </span>
+                        </div>
+                    </div>
+                    <div class="unit-meta">
+                        <span class="meta-item">
+                            <i class="bi bi-book"></i> {{ program_unit.unit.credit_hours }} Credits
+                        </span>
+                        {% if program_unit.unit.prerequisites.exists %}
+                        <span class="meta-item">
+                            <i class="bi bi-link"></i> Has Prerequisites
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% if program_unit.unit.description %}
+                    <div class="unit-description">
+                        {{ program_unit.unit.description }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Elective Units Section -->
+            {% if semester_data.elective_units %}
+            <div class="units-grid" style="margin-top: 20px;">
+                <div class="section-divider">
+                    <div class="section-divider-title">
+                        <i class="bi bi-hand-index"></i> Elective Units
+                    </div>
+                </div>
+                
+                {% for program_unit in semester_data.elective_units %}
+                <div class="unit-card">
+                    <div class="unit-header">
+                        <span class="unit-code">{{ program_unit.unit.code }}</span>
+                        <span class="unit-name">{{ program_unit.unit.name }}</span>
+                        <div class="unit-badges">
+                            <span class="unit-badge badge-elective">
+                                <i class="bi bi-hand-index"></i> Elective
+                            </span>
+                        </div>
+                    </div>
+                    <div class="unit-meta">
+                        <span class="meta-item">
+                            <i class="bi bi-book"></i> {{ program_unit.unit.credit_hours }} Credits
+                        </span>
+                        {% if program_unit.unit.prerequisites.exists %}
+                        <span class="meta-item">
+                            <i class="bi bi-link"></i> Has Prerequisites
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% if program_unit.unit.description %}
+                    <div class="unit-description">
+                        {{ program_unit.unit.description }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Empty Semester -->
+            {% if not semester_data.mandatory_units and not semester_data.elective_units %}
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="bi bi-inbox"></i>
+                </div>
+                <h3 class="empty-title">No Units</h3>
+                <p class="empty-text">No units scheduled for this semester.</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function switchYear(element, yearId) {
+        // Get all year tabs and contents
+        const tabs = element.parentElement.querySelectorAll('.year-tab');
+        const yearContents = document.querySelectorAll('.year-content');
+        
+        // Remove active from all
+        tabs.forEach(tab => tab.classList.remove('active'));
+        yearContents.forEach(content => content.classList.remove('active'));
+        
+        // Add active to clicked tab and corresponding content
+        element.classList.add('active');
+        document.getElementById(yearId).classList.add('active');
+        
+        // Reset semester tabs to first one
+        const firstSemesterTab = document.querySelector(`#${yearId} .semester-tab`);
+        if (firstSemesterTab) {
+            firstSemesterTab.click();
+        }
+    }
+
+    function switchSemester(element, semesterId) {
+        // Get parent container
+        const parentYear = element.closest('.year-content');
+        
+        // Get all semester tabs and contents in this year
+        const tabs = parentYear.querySelectorAll('.semester-tab');
+        const contents = parentYear.querySelectorAll('.semester-content');
+        
+        // Remove active from all
+        tabs.forEach(tab => tab.classList.remove('active'));
+        contents.forEach(content => content.classList.remove('active'));
+        
+        // Add active to clicked tab and corresponding content
+        element.classList.add('active');
+        document.getElementById(semesterId).classList.add('active');
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Click first year tab
+        const firstYearTab = document.querySelector('.year-tab.active');
+        if (firstYearTab) {
+            firstYearTab.click();
+        }
+    });
+</script>
+{% endblock %}
