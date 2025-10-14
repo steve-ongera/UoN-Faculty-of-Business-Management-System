@@ -17,22 +17,33 @@ from .models import (
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name', 'user_type', 'is_active_user', 'is_staff')
+    list_display = (
+        'username', 'email', 'first_name', 'last_name',
+        'user_type', 'is_active_user', 'is_staff'
+    )
     list_filter = ('user_type', 'is_active_user', 'is_staff', 'is_superuser')
     search_fields = ('username', 'email', 'first_name', 'last_name', 'phone_number')
     ordering = ('username',)
-    
-    fieldsets = BaseUserAdmin.fieldsets + (
-        ('Custom Fields', {
-            'fields': ('user_type', 'phone_number', 'profile_picture', 'is_active_user')
+
+    # 👇 Remove the default date_joined field completely
+    fieldsets = (
+        (None, {'fields': ('username', 'password')}),
+        ('Personal info', {'fields': ('first_name', 'last_name', 'email', 'phone_number', 'profile_picture')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Custom Fields', {'fields': ('user_type', 'is_active_user')}),
+    )
+
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': (
+                'username', 'email', 'first_name', 'last_name', 'password1', 'password2',
+                'user_type', 'phone_number', 'profile_picture', 'is_active_user',
+            ),
         }),
     )
-    
-    add_fieldsets = BaseUserAdmin.add_fieldsets + (
-        ('Custom Fields', {
-            'fields': ('user_type', 'phone_number', 'profile_picture', 'is_active_user')
-        }),
-    )
+
+    exclude = ('date_joined',)  # 👈 ensure admin doesn’t try to access it
 
 
 # ========================
