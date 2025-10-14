@@ -1,0 +1,690 @@
+{% extends 'student_base.html' %}
+
+{% block title %}Register Units - Faculty Management System{% endblock %}
+
+{% block page_title %}Unit Registration{% endblock %}
+
+{% block extra_css %}
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+        position: relative;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .header-section {
+        margin-bottom: 30px;
+        padding-bottom: 24px;
+        border-bottom: 2px solid #F1F5F9;
+    }
+
+    .header-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .header-title i {
+        color: #4F46E5;
+        font-size: 28px;
+    }
+
+    .header-subtitle {
+        font-size: 14px;
+        color: #64748B;
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+
+    .info-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #E0E7FF;
+        color: #3730A3;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 13px;
+    }
+
+    .deadline-alert {
+        background: linear-gradient(135deg, #E0F2FE 0%, #DBEAFE 100%);
+        border-left: 4px solid #0284C7;
+        padding: 16px;
+        border-radius: 6px;
+        margin-bottom: 24px;
+        display: flex;
+        gap: 12px;
+    }
+
+    .deadline-alert i {
+        font-size: 18px;
+        color: #0284C7;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .deadline-text {
+        color: #0369A1;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .deadline-text strong {
+        color: #0C4A6E;
+        font-weight: 700;
+    }
+
+    .units-section {
+        margin-bottom: 30px;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #F1F5F9;
+    }
+
+    .section-title i {
+        color: #4F46E5;
+        font-size: 20px;
+    }
+
+    .unit-type-label {
+        display: inline-block;
+        padding: 4px 12px;
+        background: #F1F5F9;
+        color: #64748B;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-left: auto;
+    }
+
+    .unit-type-mandatory {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+
+    .unit-type-elective {
+        background: #E0F2FE;
+        color: #0369A1;
+    }
+
+    .units-grid {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .unit-card {
+        background: #F8FAFC;
+        border: 2px solid #E2E8F0;
+        border-radius: 8px;
+        padding: 16px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .unit-card:hover {
+        border-color: #4F46E5;
+        background: #F0F9FF;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.1);
+    }
+
+    .unit-card input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        margin-top: 2px;
+        flex-shrink: 0;
+        accent-color: #4F46E5;
+    }
+
+    .unit-card.already-enrolled {
+        background: #F5F3FF;
+        border-color: #DDD6FE;
+        opacity: 0.8;
+    }
+
+    .unit-card.already-enrolled input[type="checkbox"] {
+        cursor: not-allowed;
+    }
+
+    .unit-info {
+        flex: 1;
+        transition: opacity 0.3s ease;
+    }
+
+    .unit-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+    }
+
+    .unit-code {
+        font-size: 12px;
+        font-weight: 700;
+        color: #4F46E5;
+        background: rgba(79, 70, 229, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .unit-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .unit-meta {
+        font-size: 12px;
+        color: #64748B;
+        display: flex;
+        gap: 12px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+    }
+
+    .unit-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        background: rgba(79, 70, 229, 0.1);
+        color: #4F46E5;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    .already-enrolled-label {
+        background: #DCFCE7;
+        color: #166534;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .unit-description {
+        font-size: 13px;
+        color: #94A3B8;
+        margin-top: 8px;
+        line-height: 1.5;
+    }
+
+    .units-summary {
+        background: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+        border: 2px solid #E0E7FF;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 30px 0;
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .summary-item {
+        background: white;
+        padding: 12px;
+        border-radius: 6px;
+        border-left: 3px solid #4F46E5;
+    }
+
+    .summary-label {
+        color: #64748B;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .summary-value {
+        color: #1E293B;
+        font-weight: 700;
+        font-size: 18px;
+    }
+
+    .summary-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-top: 2px solid rgba(255, 255, 255, 0.5);
+        margin-top: 12px;
+        padding-top: 12px;
+    }
+
+    .summary-total-label {
+        color: #1E293B;
+        font-weight: 700;
+        font-size: 15px;
+    }
+
+    .summary-total-value {
+        color: #4F46E5;
+        font-weight: 700;
+        font-size: 20px;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 12px;
+        margin-top: 30px;
+    }
+
+    .register-btn {
+        flex: 1;
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #4F46E5, #7C3AED);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .register-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
+    }
+
+    .register-btn:active:not(:disabled) {
+        transform: translateY(0);
+    }
+
+    .register-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .cancel-btn {
+        flex: 1;
+        padding: 12px 24px;
+        background: #F1F5F9;
+        color: #64748B;
+        border: 2px solid #E2E8F0;
+        border-radius: 6px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .cancel-btn:hover {
+        background: #E2E8F0;
+        border-color: #CBD5E1;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: #CBD5E1;
+        margin-bottom: 16px;
+    }
+
+    .empty-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #64748B;
+        margin-bottom: 8px;
+    }
+
+    .empty-text {
+        font-size: 14px;
+        color: #94A3B8;
+    }
+
+    @media (max-width: 768px) {
+        .section-container {
+            padding: 20px;
+        }
+
+        .header-title {
+            font-size: 20px;
+        }
+
+        .header-subtitle {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+        }
+
+        .unit-card {
+            flex-direction: column;
+        }
+
+        .unit-meta {
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .section-title {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .unit-type-label {
+            margin-left: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Unit Registration</li>
+    </ol>
+</nav>
+
+<div class="section-container">
+    <!-- Header -->
+    <div class="header-section">
+        <h1 class="header-title">
+            <i class="bi bi-book-half"></i> Unit Registration
+        </h1>
+        <div class="header-subtitle">
+            <span class="info-badge">
+                <i class="bi bi-calendar3"></i>
+                {{ current_semester.academic_year.year_code }}
+            </span>
+            <span class="info-badge">
+                <i class="bi bi-hourglass-split"></i>
+                Semester {{ current_semester.semester_number }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Deadline Alert -->
+    <div class="deadline-alert">
+        <i class="bi bi-clock-history"></i>
+        <div class="deadline-text">
+            <strong>Registration Deadline:</strong> {{ registration_deadline|date:"l, d M Y" }}
+            <br>
+            <span style="font-size: 12px;">
+                Complete your unit registration before the deadline. After this date, you won't be able to add or remove units.
+            </span>
+        </div>
+    </div>
+
+    <!-- Unit Selection Form -->
+    <form method="post" id="unitsForm">
+        {% csrf_token %}
+
+        <!-- Mandatory Units Section -->
+        {% if mandatory_units %}
+        <div class="units-section">
+            <div class="section-title">
+                <i class="bi bi-star-fill"></i>
+                Mandatory Units
+                <span class="unit-type-label unit-type-mandatory">Required</span>
+            </div>
+            <div class="units-grid">
+                {% for program_unit in mandatory_units %}
+                <label class="unit-card {% if program_unit.unit.id in enrolled_unit_ids %}already-enrolled{% endif %}">
+                    <input 
+                        type="checkbox" 
+                        name="units" 
+                        value="{{ program_unit.id }}"
+                        {% if program_unit.unit.id in enrolled_unit_ids %}disabled checked{% endif %}
+                        onchange="updateSummary()"
+                    >
+                    <div class="unit-info">
+                        <div class="unit-header">
+                            <span class="unit-code">{{ program_unit.unit.code }}</span>
+                            <span class="unit-name">{{ program_unit.unit.name }}</span>
+                        </div>
+                        <div class="unit-meta">
+                            <span class="unit-badge">
+                                <i class="bi bi-book"></i> {{ program_unit.unit.credit_hours }} Credits
+                            </span>
+                            {% if program_unit.unit.id in enrolled_unit_ids %}
+                            <span class="already-enrolled-label">
+                                <i class="bi bi-check-circle-fill"></i> Already Registered
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% if program_unit.unit.description %}
+                        <div class="unit-description">
+                            {{ program_unit.unit.description }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Elective Units Section -->
+        {% if elective_units %}
+        <div class="units-section">
+            <div class="section-title">
+                <i class="bi bi-hand-index"></i>
+                Elective Units
+                <span class="unit-type-label unit-type-elective">Optional</span>
+            </div>
+            <div class="units-grid">
+                {% for program_unit in elective_units %}
+                <label class="unit-card {% if program_unit.unit.id in enrolled_unit_ids %}already-enrolled{% endif %}">
+                    <input 
+                        type="checkbox" 
+                        name="units" 
+                        value="{{ program_unit.id }}"
+                        {% if program_unit.unit.id in enrolled_unit_ids %}disabled checked{% endif %}
+                        onchange="updateSummary()"
+                    >
+                    <div class="unit-info">
+                        <div class="unit-header">
+                            <span class="unit-code">{{ program_unit.unit.code }}</span>
+                            <span class="unit-name">{{ program_unit.unit.name }}</span>
+                        </div>
+                        <div class="unit-meta">
+                            <span class="unit-badge">
+                                <i class="bi bi-book"></i> {{ program_unit.unit.credit_hours }} Credits
+                            </span>
+                            {% if program_unit.unit.id in enrolled_unit_ids %}
+                            <span class="already-enrolled-label">
+                                <i class="bi bi-check-circle-fill"></i> Already Registered
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% if program_unit.unit.description %}
+                        <div class="unit-description">
+                            {{ program_unit.unit.description }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- No Units Available -->
+        {% if not mandatory_units and not elective_units %}
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3 class="empty-title">No Units Available</h3>
+            <p class="empty-text">
+                There are currently no units available for your programme and year level in this semester.
+                <br>
+                Please contact your academic advisor for more information.
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Summary -->
+        {% if mandatory_units or elective_units %}
+        <div class="units-summary">
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-label">
+                        <i class="bi bi-star-fill" style="color: #F59E0B;"></i>
+                        Mandatory Units
+                    </div>
+                    <div class="summary-value">{{ mandatory_units.count }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">
+                        <i class="bi bi-hand-index" style="color: #3B82F6;"></i>
+                        Elective Units
+                    </div>
+                    <div class="summary-value">{{ elective_units.count }}</div>
+                </div>
+            </div>
+            <div class="summary-total">
+                <span class="summary-total-label">
+                    <i class="bi bi-book" style="color: #6366F1; margin-right: 6px;"></i>
+                    Total Units to Register
+                </span>
+                <span class="summary-total-value" id="totalUnits">0</span>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button type="submit" class="register-btn">
+                <i class="bi bi-check-circle"></i> Complete Registration
+            </button>
+            <a href="{% url 'student_dashboard' %}" class="cancel-btn">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateSummary() {
+        const checkboxes = document.querySelectorAll('input[name="units"]:not(:disabled)');
+        const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        document.getElementById('totalUnits').textContent = checkedCount;
+    }
+
+    // Form validation
+    document.getElementById('unitsForm').addEventListener('submit', function(e) {
+        const checkboxes = document.querySelectorAll('input[name="units"]:not(:disabled)');
+        const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        
+        if (checkedCount === 0) {
+            e.preventDefault();
+            alert('Please select at least one unit to register.');
+            return false;
+        }
+    });
+
+    // Update checkbox styling on change
+    document.querySelectorAll('input[name="units"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const card = this.closest('.unit-card');
+            if (!card.classList.contains('already-enrolled')) {
+                card.style.background = this.checked ? '#EDE9FE' : '#F8FAFC';
+            }
+        });
+    });
+
+    // Initialize summary on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateSummary();
+    });
+</script>
+{% endblock %}

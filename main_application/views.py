@@ -826,3 +826,223 @@ def unregister_from_event(request, event_id):
         messages.warning(request, "You are not registered for this event.")
     
     return redirect('student_event_detail', event_id=event_id)
+
+# views.py - Student Units Management Views
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.db.models import Q, Prefetch
+from django.utils import timezone
+from datetime import timedelta
+from .models import (
+    Student, Unit, ProgrammeUnit, UnitEnrollment, SemesterRegistration, 
+    Semester, AcademicYear
+)
+
+
+@login_required(login_url='login')
+def register_units(request):
+    """Register units for current semester"""
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    # Get current semester
+    current_semester = Semester.objects.filter(is_current=True).first()
+    if not current_semester:
+        messages.error(request, "No active semester found.")
+        return redirect('student_dashboard')
+    
+    # Check if student can register
+    registration_deadline = current_semester.registration_deadline
+    if timezone.now().date() > registration_deadline:
+        messages.error(request, f"Registration deadline has passed ({registration_deadline}).")
+        return redirect('student_dashboard')
+    
+    # Get available units for student's programme and year
+    available_units = ProgrammeUnit.objects.filter(
+        programme=student.programme,
+        year_level=student.current_year,
+        semester=current_semester.semester_number
+    ).select_related('unit')
+    
+    # Get already enrolled units for this semester
+    enrolled_unit_ids = UnitEnrollment.objects.filter(
+        student=student,
+        semester=current_semester
+    ).values_list('unit_id', flat=True)
+    
+    # Check if semester registration exists
+    sem_registration, created = SemesterRegistration.objects.get_or_create(
+        student=student,
+        semester=current_semester
+    )
+    
+    if request.method == 'POST':
+        selected_units = request.POST.getlist('units')
+        
+        if not selected_units:
+            messages.warning(request, "Please select at least one unit.")
+            return redirect('register_units')
+        
+        # Validate that selected units belong to student's programme
+        valid_units = ProgrammeUnit.objects.filter(
+            id__in=selected_units,
+            programme=student.programme,
+            year_level=student.current_year,
+            semester=current_semester.semester_number
+        ).values_list('unit_id', flat=True)
+        
+        created_count = 0
+        for unit_id in valid_units:
+            # Check if already enrolled
+            if unit_id not in enrolled_unit_ids:
+                UnitEnrollment.objects.create(
+                    student=student,
+                    unit_id=unit_id,
+                    semester=current_semester,
+                    status='ENROLLED'
+                )
+                created_count += 1
+        
+        # Update semester registration
+        sem_registration.units_enrolled = UnitEnrollment.objects.filter(
+            student=student,
+            semester=current_semester
+        ).count()
+        sem_registration.status = 'REGISTERED'
+        sem_registration.save()
+        
+        if created_count > 0:
+            messages.success(request, f"Successfully registered for {created_count} unit(s).")
+        else:
+            messages.info(request, "Units already registered.")
+        
+        return redirect('student_enrollments')
+    
+    # Separate mandatory and elective units
+    mandatory_units = available_units.filter(is_mandatory=True)
+    elective_units = available_units.filter(is_mandatory=False)
+    
+    context = {
+        'current_semester': current_semester,
+        'mandatory_units': mandatory_units,
+        'elective_units': elective_units,
+        'enrolled_unit_ids': enrolled_unit_ids,
+        'registration_deadline': registration_deadline,
+    }
+    
+    return render(request, 'student/units/register_units.html', context)
+
+
+@login_required(login_url='login')
+def student_enrollments(request):
+    """View student enrollments organized by academic year and semester"""
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    # Get all enrollments grouped by academic year
+    enrollments = UnitEnrollment.objects.filter(
+        student=student
+    ).select_related('unit', 'semester', 'semester__academic_year').order_by(
+        '-semester__academic_year__start_date',
+        '-semester__semester_number'
+    )
+    
+    # Organize by academic year
+    enrollments_by_year = {}
+    for enrollment in enrollments:
+        year_code = enrollment.semester.academic_year.year_code
+        if year_code not in enrollments_by_year:
+            enrollments_by_year[year_code] = {
+                'academic_year': enrollment.semester.academic_year,
+                'semesters': {}
+            }
+        
+        sem_num = enrollment.semester.semester_number
+        if sem_num not in enrollments_by_year[year_code]['semesters']:
+            enrollments_by_year[year_code]['semesters'][sem_num] = {
+                'semester': enrollment.semester,
+                'units': []
+            }
+        
+        enrollments_by_year[year_code]['semesters'][sem_num]['units'].append(enrollment)
+    
+    # Calculate registration dates for drop eligibility
+    current_date = timezone.now().date()
+    for year_code in enrollments_by_year:
+        for sem_num in enrollments_by_year[year_code]['semesters']:
+            for enrollment in enrollments_by_year[year_code]['semesters'][sem_num]['units']:
+                registration_date = enrollment.enrollment_date.date()
+                drop_eligible_date = registration_date + timedelta(days=7)
+                enrollment.can_drop = current_date >= drop_eligible_date
+                enrollment.days_until_drop = (drop_eligible_date - current_date).days
+    
+    context = {
+        'enrollments_by_year': enrollments_by_year,
+        'total_enrollments': enrollments.count(),
+    }
+    
+    return render(request, 'student/units/student_enrollments.html', context)
+
+
+@login_required(login_url='login')
+def drop_unit(request, enrollment_id):
+    """Drop a unit (after 7 days from registration)"""
+    if request.method != 'POST':
+        return redirect('student_enrollments')
+    
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    enrollment = get_object_or_404(
+        UnitEnrollment,
+        id=enrollment_id,
+        student=student
+    )
+    
+    # Check if within 7 days
+    registration_date = enrollment.enrollment_date.date()
+    current_date = timezone.now().date()
+    drop_eligible_date = registration_date + timedelta(days=7)
+    
+    if current_date < drop_eligible_date:
+        days_remaining = (drop_eligible_date - current_date).days
+        messages.error(
+            request,
+            f"You can only drop this unit after {days_remaining} more day(s) "
+            f"(eligible from {drop_eligible_date})."
+        )
+        return redirect('student_enrollments')
+    
+    unit_name = enrollment.unit.name
+    unit_code = enrollment.unit.code
+    
+    # Mark as dropped
+    enrollment.status = 'DROPPED'
+    enrollment.save()
+    
+    # Update semester registration count
+    sem_registration = SemesterRegistration.objects.filter(
+        student=student,
+        semester=enrollment.semester
+    ).first()
+    
+    if sem_registration:
+        sem_registration.units_enrolled = UnitEnrollment.objects.filter(
+            student=student,
+            semester=enrollment.semester,
+            status__in=['ENROLLED', 'COMPLETED']
+        ).count()
+        sem_registration.save()
+    
+    messages.success(request, f"Successfully dropped {unit_code} - {unit_name}.")
+    return redirect('student_enrollments')
