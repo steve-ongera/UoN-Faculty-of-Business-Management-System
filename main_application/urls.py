@@ -30,4 +30,12 @@ urlpatterns = [
     path('academic-calendar/', views.student_academic_calendar, name='student_academic_calendar'),
     path('timetable/', views.student_timetable_view, name='student_timetable'),
 
+    path('messages/', views.messaging_list, name='messaging_list'),
+    path('messages/<int:user_id>/', views.message_thread, name='message_thread'),
+    path('api/messages/send/<int:user_id>/', views.send_message, name='send_message'),
+    path('api/messages/search/', views.search_users, name='search_users'),
+    path('api/messages/mark-read/<int:message_id>/', views.mark_as_read, name='mark_as_read'),
+    path('api/messages/unread-count/', views.get_unread_count, name='get_unread_count'),
+    path('api/messages/delete/<int:user_id>/', views.delete_conversation, name='delete_conversation'),
+
 ]

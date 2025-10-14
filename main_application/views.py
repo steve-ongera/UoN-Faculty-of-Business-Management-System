@@ -1668,3 +1668,280 @@ def student_timetable_view(request):
     }
     
     return render(request, 'student/timetable.html', context)
+
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.db.models import Q, Max, F
+from django.utils import timezone
+from django.views.decorators.http import require_http_methods
+from django.core.paginator import Paginator
+from datetime import datetime
+import json
+
+from .models import User, Message, MessageReadStatus, Student, Lecturer
+
+# ========================
+# MESSAGING VIEWS
+# ========================
+
+@login_required
+def messaging_list(request):
+    """
+    Main messaging page - shows conversation list and chat area
+    """
+    user = request.user
+    
+    # Get all conversations (latest message with each user)
+    conversations = Message.objects.filter(
+        Q(sender=user) | Q(recipients=user)
+    ).distinct('sender', 'recipients').select_related(
+        'sender', 'sender__student_profile', 'sender__lecturer_profile'
+    ).order_by('-sent_at')
+    
+    # Get unique conversation partners
+    conversation_partners = {}
+    for msg in conversations:
+        partner = msg.sender if msg.sender != user else msg.recipients.first()
+        if partner and partner not in conversation_partners:
+            conversation_partners[partner] = msg
+    
+    # Prepare conversation list with last message info
+    conversation_list = []
+    for partner, last_msg in conversation_partners.items():
+        unread_count = MessageReadStatus.objects.filter(
+            message__sender=partner,
+            recipient=user,
+            is_read=False
+        ).count()
+        
+        conversation_list.append({
+            'user': partner,
+            'last_message': last_msg,
+            'unread_count': unread_count,
+        })
+    
+    # Sort by most recent
+    conversation_list.sort(key=lambda x: x['last_message'].sent_at, reverse=True)
+    
+    context = {
+        'conversations': conversation_list,
+        'user_type': user.user_type,
+    }
+    return render(request, 'messaging/message_list.html', context)
+
+
+@login_required
+def message_thread(request, user_id):
+    """
+    Get message thread between current user and specified user
+    """
+    current_user = request.user
+    other_user = get_object_or_404(User, id=user_id)
+    
+    if current_user == other_user:
+        return redirect('messaging_list')
+    
+    # Get all messages between these two users
+    messages = Message.objects.filter(
+        Q(sender=current_user, recipients=other_user) |
+        Q(sender=other_user, recipients=current_user)
+    ).select_related('sender').order_by('sent_at')
+    
+    # Mark messages as read
+    MessageReadStatus.objects.filter(
+        message__sender=other_user,
+        message__recipients=current_user,
+        recipient=current_user,
+        is_read=False
+    ).update(is_read=True, read_at=timezone.now())
+    
+    # Prepare message data
+    message_data = []
+    for msg in messages:
+        read_status = MessageReadStatus.objects.filter(
+            message=msg,
+            recipient=current_user
+        ).first()
+        
+        message_data.append({
+            'id': msg.id,
+            'sender': msg.sender.get_full_name(),
+            'sender_id': msg.sender.id,
+            'body': msg.body,
+            'sent_at': msg.sent_at.isoformat(),
+            'is_own': msg.sender == current_user,
+            'is_read': read_status.is_read if read_status else False,
+        })
+    
+    # Get other user's profile info
+    profile_info = {
+        'id': other_user.id,
+        'name': other_user.get_full_name(),
+        'email': other_user.email,
+        'phone': other_user.phone_number,
+        'user_type': other_user.get_user_type_display(),
+    }
+    
+    if other_user.user_type == 'STUDENT' and hasattr(other_user, 'student_profile'):
+        profile_info['registration_number'] = other_user.student_profile.registration_number
+        profile_info['programme'] = str(other_user.student_profile.programme)
+    elif other_user.user_type == 'LECTURER' and hasattr(other_user, 'lecturer_profile'):
+        profile_info['staff_number'] = other_user.lecturer_profile.staff_number
+        profile_info['department'] = str(other_user.lecturer_profile.department)
+    
+    context = {
+        'other_user': other_user,
+        'profile_info': profile_info,
+        'messages': message_data,
+    }
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse(context)
+    
+    return render(request, 'messaging/message_thread.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def send_message(request, user_id):
+    """
+    Send a message to a user (AJAX)
+    """
+    current_user = request.user
+    recipient = get_object_or_404(User, id=user_id)
+    
+    if current_user == recipient:
+        return JsonResponse({'error': 'Cannot message yourself'}, status=400)
+    
+    data = json.loads(request.body)
+    body = data.get('message', '').strip()
+    
+    if not body:
+        return JsonResponse({'error': 'Message cannot be empty'}, status=400)
+    
+    # Create message
+    message = Message.objects.create(
+        sender=current_user,
+        subject='Direct Message',
+        body=body,
+        message_type='DIRECT'
+    )
+    message.recipients.add(recipient)
+    
+    # Create read status
+    MessageReadStatus.objects.create(
+        message=message,
+        recipient=recipient,
+        is_read=False
+    )
+    
+    return JsonResponse({
+        'success': True,
+        'message': {
+            'id': message.id,
+            'sender': current_user.get_full_name(),
+            'sender_id': current_user.id,
+            'body': message.body,
+            'sent_at': message.sent_at.isoformat(),
+            'is_own': True,
+            'is_read': False,
+        }
+    })
+
+
+@login_required
+@require_http_methods(["GET"])
+def search_users(request):
+    """
+    Search for users to message (AJAX)
+    """
+    query = request.GET.get('q', '').strip()
+    current_user = request.user
+    
+    if not query or len(query) < 2:
+        return JsonResponse({'users': []})
+    
+    # Search by name, email, or registration number
+    users = User.objects.filter(
+        ~Q(id=current_user.id),
+        Q(first_name__icontains=query) |
+        Q(last_name__icontains=query) |
+        Q(email__icontains=query) |
+        Q(student_profile__registration_number__icontains=query) |
+        Q(lecturer_profile__staff_number__icontains=query)
+    ).distinct()[:10]
+    
+    users_data = []
+    for user in users:
+        user_info = {
+            'id': user.id,
+            'name': user.get_full_name(),
+            'email': user.email,
+            'user_type': user.get_user_type_display(),
+            'type_code': user.user_type,
+        }
+        
+        if user.user_type == 'STUDENT' and hasattr(user, 'student_profile'):
+            user_info['identifier'] = user.student_profile.registration_number
+        elif user.user_type == 'LECTURER' and hasattr(user, 'lecturer_profile'):
+            user_info['identifier'] = user.lecturer_profile.staff_number
+        
+        users_data.append(user_info)
+    
+    return JsonResponse({'users': users_data})
+
+
+@login_required
+@require_http_methods(["POST"])
+def mark_as_read(request, message_id):
+    """
+    Mark a message as read (AJAX)
+    """
+    message = get_object_or_404(Message, id=message_id)
+    
+    read_status = MessageReadStatus.objects.filter(
+        message=message,
+        recipient=request.user
+    ).first()
+    
+    if read_status:
+        read_status.is_read = True
+        read_status.read_at = timezone.now()
+        read_status.save()
+        return JsonResponse({'success': True})
+    
+    return JsonResponse({'error': 'Read status not found'}, status=404)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_unread_count(request):
+    """
+    Get total unread message count (AJAX)
+    """
+    unread_count = MessageReadStatus.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).count()
+    
+    return JsonResponse({'unread_count': unread_count})
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_conversation(request, user_id):
+    """
+    Delete a conversation (AJAX)
+    """
+    current_user = request.user
+    other_user = get_object_or_404(User, id=user_id)
+    
+    # Delete messages between these users
+    Message.objects.filter(
+        Q(sender=current_user, recipients=other_user) |
+        Q(sender=other_user, recipients=current_user)
+    ).delete()
+    
+    return JsonResponse({'success': True})

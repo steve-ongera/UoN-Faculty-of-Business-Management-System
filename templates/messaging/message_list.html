@@ -1,0 +1,974 @@
+{% extends 'student_base.html' %}
+{% load static %}
+
+{% block title %}Messages - Faculty Management System{% endblock %}
+
+{% block page_title %}Messages{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .messaging-container {
+        display: grid;
+        grid-template-columns: 4fr 8fr;
+        gap: 20px;
+        height: calc(100vh - 200px);
+        min-height: 600px;
+    }
+
+    /* ========================
+       CONVERSATION LIST (LEFT)
+       ======================== */
+    .conversation-list-section {
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #E2E8F0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .conversation-header {
+        padding: 20px;
+        border-bottom: 2px solid #E2E8F0;
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+    }
+
+    .conversation-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: white;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .search-box {
+        position: relative;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 10px 14px 10px 36px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        font-size: 13px;
+        transition: all 0.3s ease;
+    }
+
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .search-input:focus {
+        outline: none;
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 14px;
+        pointer-events: none;
+    }
+
+    .conversation-list {
+        flex: 1;
+        overflow-y: auto;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .conversation-item {
+        padding: 12px 15px;
+        border-bottom: 1px solid #F1F5F9;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .conversation-item:hover {
+        background: #F8FAFC;
+    }
+
+    .conversation-item.active {
+        background: #EEF2FF;
+        border-left: 3px solid #4F46E5;
+    }
+
+    .conversation-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 6px;
+    }
+
+    .conversation-name {
+        font-weight: 600;
+        color: #1E293B;
+        font-size: 14px;
+        flex: 1;
+    }
+
+    .conversation-time {
+        font-size: 12px;
+        color: #94A3B8;
+        white-space: nowrap;
+        margin-left: 8px;
+    }
+
+    .conversation-preview {
+        font-size: 13px;
+        color: #64748B;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .unread-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        background: #4F46E5;
+        color: white;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-left: auto;
+    }
+
+    .empty-conversations {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        text-align: center;
+        padding: 40px 20px;
+        color: #94A3B8;
+    }
+
+    .empty-icon {
+        font-size: 36px;
+        margin-bottom: 12px;
+        color: #CBD5E1;
+    }
+
+    .search-results {
+        list-style: none;
+        margin: 0;
+        padding: 8px 0;
+        background: white;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        max-height: 300px;
+        overflow-y: auto;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        margin-top: 4px;
+    }
+
+    .search-result-item {
+        padding: 12px 16px;
+        border-bottom: 1px solid #F1F5F9;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .search-result-item:last-child {
+        border-bottom: none;
+    }
+
+    .search-result-item:hover {
+        background: #F8FAFC;
+    }
+
+    .result-name {
+        font-weight: 600;
+        color: #1E293B;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .result-meta {
+        font-size: 12px;
+        color: #94A3B8;
+    }
+
+    /* ========================
+       CHAT AREA (RIGHT)
+       ======================== */
+    .chat-section {
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #E2E8F0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .chat-header {
+        padding: 20px;
+        border-bottom: 2px solid #E2E8F0;
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        color: white;
+    }
+
+    .chat-header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .chat-user-info {
+        flex: 1;
+    }
+
+    .chat-user-name {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .user-type-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .chat-user-meta {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.85);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .chat-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-btn {
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        color: white;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+
+    .action-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    .empty-chat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        text-align: center;
+        color: #94A3B8;
+    }
+
+    .empty-chat-icon {
+        font-size: 48px;
+        color: #CBD5E1;
+        margin-bottom: 16px;
+    }
+
+    .empty-chat-text {
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+
+    .messages-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        background: #F8FAFC;
+    }
+
+    .message-group {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+        align-items: flex-end;
+    }
+
+    .message-group.own {
+        justify-content: flex-end;
+    }
+
+    .message-bubble {
+        max-width: 70%;
+        padding: 12px 16px;
+        border-radius: 12px;
+        word-wrap: break-word;
+        position: relative;
+    }
+
+    .message-bubble.received {
+        background: white;
+        color: #1E293B;
+        border: 1px solid #E2E8F0;
+        border-bottom-left-radius: 4px;
+    }
+
+    .message-bubble.sent {
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .message-text {
+        font-size: 14px;
+        line-height: 1.4;
+        margin-bottom: 6px;
+    }
+
+    .message-time {
+        font-size: 11px;
+        opacity: 0.7;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        justify-content: flex-end;
+    }
+
+    .message-status {
+        font-size: 12px;
+    }
+
+    .status-unread {
+        color: #94A3B8;
+    }
+
+    .status-read {
+        color: #4F46E5;
+    }
+
+    .message-input-section {
+        padding: 15px 20px;
+        border-top: 2px solid #E2E8F0;
+        background: white;
+    }
+
+    .input-group {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+
+    .message-input {
+        flex: 1;
+        padding: 12px 16px;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: none;
+        max-height: 120px;
+        transition: all 0.3s ease;
+    }
+
+    .message-input:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .send-btn {
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .send-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+
+    .send-btn:active {
+        transform: translateY(0);
+    }
+
+    .send-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    /* Scrollbar styling */
+    .conversation-list::-webkit-scrollbar,
+    .messages-container::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .conversation-list::-webkit-scrollbar-track,
+    .messages-container::-webkit-scrollbar-track {
+        background: #F1F5F9;
+    }
+
+    .conversation-list::-webkit-scrollbar-thumb,
+    .messages-container::-webkit-scrollbar-thumb {
+        background: #CBD5E1;
+        border-radius: 3px;
+    }
+
+    .conversation-list::-webkit-scrollbar-thumb:hover,
+    .messages-container::-webkit-scrollbar-thumb:hover {
+        background: #94A3B8;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+        .messaging-container {
+            grid-template-columns: 1fr;
+            height: auto;
+        }
+
+        .conversation-list-section {
+            max-height: 300px;
+        }
+
+        .message-bubble {
+            max-width: 85%;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .messaging-container {
+            height: auto;
+        }
+
+        .chat-header-content {
+            flex-direction: column;
+        }
+
+        .chat-actions {
+            margin-top: 12px;
+        }
+
+        .message-bubble {
+            max-width: 90%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Messages</li>
+    </ol>
+</nav>
+
+<!-- Messaging Container -->
+<div class="messaging-container">
+    <!-- Left Side - Conversation List -->
+    <div class="conversation-list-section">
+        <div class="conversation-header">
+            <div class="conversation-title">
+                <i class="bi bi-chat-dots"></i> Messages
+            </div>
+            <div class="search-box">
+                <i class="bi bi-search search-icon"></i>
+                <input 
+                    type="text" 
+                    id="userSearch" 
+                    class="search-input" 
+                    placeholder="Search users..."
+                    autocomplete="off"
+                >
+                <ul class="search-results" id="searchResults" style="display: none;"></ul>
+            </div>
+        </div>
+
+        <ul class="conversation-list" id="conversationList">
+            {% if conversations %}
+                {% for conv in conversations %}
+                <li class="conversation-item" data-user-id="{{ conv.user.id }}" onclick="loadChatThread({{ conv.user.id }})">
+                    <div class="conversation-item-header">
+                        <span class="conversation-name">{{ conv.user.get_full_name }}</span>
+                        <span class="conversation-time">
+                            {{ conv.last_message.sent_at|date:"H:i" }}
+                        </span>
+                    </div>
+                    <div class="conversation-preview">
+                        {% if conv.last_message.sender == request.user %}
+                            <span><i class="bi bi-check-all"></i> You:</span>
+                        {% endif %}
+                        {{ conv.last_message.body|truncatewords:5 }}
+                    </div>
+                    {% if conv.unread_count > 0 %}
+                    <span class="unread-badge">{{ conv.unread_count }}</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            {% else %}
+            <div class="empty-conversations">
+                <div class="empty-icon">
+                    <i class="bi bi-chat-left-text"></i>
+                </div>
+                <p>No conversations yet. Search for a user to start messaging!</p>
+            </div>
+            {% endif %}
+        </ul>
+    </div>
+
+    <!-- Right Side - Chat Area -->
+    <div class="chat-section" id="chatSection">
+        <div class="empty-chat">
+            <div class="empty-chat-icon">
+                <i class="bi bi-chat-left-dots"></i>
+            </div>
+            <p class="empty-chat-text">Select a conversation to start chatting</p>
+            <p style="font-size: 13px; color: #CBD5E1;">Search for a user on the left to begin</p>
+        </div>
+    </div>
+</div>
+
+<!-- Chat Thread Template -->
+<template id="chatThreadTemplate">
+    <div class="chat-header">
+        <div class="chat-header-content">
+            <div class="chat-user-info">
+                <div class="chat-user-name">
+                    <span id="chatUserName"></span>
+                    <span class="user-type-badge" id="userTypeBadge"></span>
+                </div>
+                <div class="chat-user-meta">
+                    <span id="userEmail"></span>
+                    <span id="userIdentifier"></span>
+                </div>
+            </div>
+            <div class="chat-actions">
+                <button class="action-btn" onclick="deleteConversation()" title="Delete conversation">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="messages-container" id="messagesContainer">
+        <!-- Messages will be inserted here -->
+    </div>
+
+    <div class="message-input-section">
+        <div class="input-group">
+            <textarea 
+                id="messageInput" 
+                class="message-input" 
+                placeholder="Type your message..."
+                rows="1"
+            ></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                <i class="bi bi-send"></i> Send
+            </button>
+        </div>
+    </div>
+</template>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Global variables
+    let currentUserId = null;
+    const currentUserType = '{{ user.user_type }}';
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                      document.querySelector('meta[name="csrf-token"]')?.content;
+
+    // Initialize messaging
+    document.addEventListener('DOMContentLoaded', function() {
+        setupSearchBox();
+        setupTextareaAutoResize();
+        loadInitialConversations();
+        setupAutoRefresh();
+    });
+
+    // ========================
+    // SEARCH FUNCTIONALITY
+    // ========================
+    function setupSearchBox() {
+        const searchInput = document.getElementById('userSearch');
+        const searchResults = document.getElementById('searchResults');
+        let searchTimeout;
+
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+
+            if (query.length < 2) {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            searchTimeout = setTimeout(() => {
+                fetch(`{% url 'search_users' %}?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        displaySearchResults(data.users);
+                    })
+                    .catch(error => console.error('Search error:', error));
+            }, 300);
+        });
+
+        // Close search results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.search-box')) {
+                searchResults.style.display = 'none';
+            }
+        });
+    }
+
+    function displaySearchResults(users) {
+        const searchResults = document.getElementById('searchResults');
+        const searchInput = document.getElementById('userSearch');
+
+        if (users.length === 0) {
+            searchResults.innerHTML = '<li class="search-result-item">No users found</li>';
+        } else {
+            searchResults.innerHTML = users.map(user => `
+                <li class="search-result-item" onclick="selectUserToMessage(${user.id}, '${user.name}')">
+                    <div class="result-name">${user.name}</div>
+                    <div class="result-meta">
+                        <span>${user.user_type}</span>
+                        ${user.identifier ? `• ${user.identifier}` : ''}
+                        ${user.email ? `• ${user.email}` : ''}
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        searchResults.style.display = 'block';
+    }
+
+    function selectUserToMessage(userId, userName) {
+        const searchInput = document.getElementById('userSearch');
+        const searchResults = document.getElementById('searchResults');
+
+        searchInput.value = '';
+        searchResults.style.display = 'none';
+        loadChatThread(userId);
+    }
+
+    // ========================
+    // CHAT THREAD LOADING
+    // ========================
+    function loadChatThread(userId) {
+        currentUserId = userId;
+
+        // Update active state in conversation list
+        document.querySelectorAll('.conversation-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        document.querySelector(`[data-user-id="${userId}"]`)?.classList.add('active');
+
+        // Fetch chat thread
+        fetch(`{% url 'message_thread' 0 %}`.replace('0', userId), {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            renderChatThread(data);
+        })
+        .catch(error => console.error('Error loading chat:', error));
+    }
+
+    function renderChatThread(data) {
+        const chatSection = document.getElementById('chatSection');
+        const template = document.getElementById('chatThreadTemplate');
+        const clone = template.content.cloneNode(true);
+
+        // Set user info
+        clone.querySelector('#chatUserName').textContent = data.profile_info.name;
+        clone.querySelector('#userTypeBadge').textContent = data.profile_info.user_type;
+        clone.querySelector('#userEmail').innerHTML = `<i class="bi bi-envelope"></i> ${data.profile_info.email || 'N/A'}`;
+
+        let identifier = '';
+        if (data.profile_info.registration_number) {
+            identifier = `<i class="bi bi-card-text"></i> ${data.profile_info.registration_number}`;
+        } else if (data.profile_info.staff_number) {
+            identifier = `<i class="bi bi-person-badge"></i> ${data.profile_info.staff_number}`;
+        }
+        clone.querySelector('#userIdentifier').innerHTML = identifier;
+
+        // Render messages
+        const messagesContainer = clone.querySelector('#messagesContainer');
+        if (data.messages.length === 0) {
+            messagesContainer.innerHTML = `
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94A3B8;">
+                    <i class="bi bi-chat-left" style="font-size: 36px; margin-bottom: 12px; color: #CBD5E1;"></i>
+                    <p>No messages yet. Start the conversation!</p>
+                </div>
+            `;
+        } else {
+            messagesContainer.innerHTML = data.messages.map(msg => `
+                <div class="message-group ${msg.is_own ? 'own' : ''}">
+                    <div class="message-bubble ${msg.is_own ? 'sent' : 'received'}">
+                        <div class="message-text">${escapeHtml(msg.body)}</div>
+                        <div class="message-time">
+                            ${new Date(msg.sent_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                            ${msg.is_own ? `<span class="message-status ${msg.is_read ? 'status-read' : 'status-unread'}">
+                                <i class="bi ${msg.is_read ? 'bi-check-all' : 'bi-check'}"></i>
+                            </span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Scroll to bottom
+            setTimeout(() => {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 0);
+        }
+
+        // Clear and append new chat
+        chatSection.innerHTML = '';
+        chatSection.appendChild(clone);
+
+        // Setup event listeners
+        setupMessageInput();
+    }
+
+    // ========================
+    // MESSAGE SENDING
+    // ========================
+    function setupMessageInput() {
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        messageInput.focus();
+    }
+
+    function sendMessage() {
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const message = messageInput.value.trim();
+
+        if (!message || !currentUserId) {
+            return;
+        }
+
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+
+        fetch(`{% url 'send_message' 0 %}`.replace('0', currentUserId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({ message: message })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Add message to display
+                const messagesContainer = document.getElementById('messagesContainer');
+                
+                if (messagesContainer.querySelector('div[style*="flex: 1"]')) {
+                    messagesContainer.innerHTML = '';
+                }
+
+                const messageHtml = `
+                    <div class="message-group own">
+                        <div class="message-bubble sent">
+                            <div class="message-text">${escapeHtml(data.message.body)}</div>
+                            <div class="message-time">
+                                ${new Date(data.message.sent_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                                <span class="message-status status-unread">
+                                    <i class="bi bi-check"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                // Reload conversations to update
+                loadInitialConversations();
+            } else {
+                alert('Error sending message: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error sending message');
+        })
+        .finally(() => {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="bi bi-send"></i> Send';
+        });
+    }
+
+    // ========================
+    // UTILITY FUNCTIONS
+    // ========================
+    function setupTextareaAutoResize() {
+        document.addEventListener('input', function(e) {
+            if (e.target.id === 'messageInput') {
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }
+        });
+    }
+
+    function loadInitialConversations() {
+        // This could be optimized with AJAX if needed
+        // For now, the initial conversations are loaded with the page
+    }
+
+    function deleteConversation() {
+        if (!currentUserId) return;
+
+        if (!confirm('Are you sure you want to delete this conversation?')) {
+            return;
+        }
+
+        fetch(`{% url 'delete_conversation' 0 %}`.replace('0', currentUserId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Remove conversation from list and reset chat
+                document.querySelector(`[data-user-id="${currentUserId}"]`)?.remove();
+                document.getElementById('chatSection').innerHTML = `
+                    <div class="empty-chat">
+                        <div class="empty-chat-icon">
+                            <i class="bi bi-chat-left-dots"></i>
+                        </div>
+                        <p class="empty-chat-text">Select a conversation to start chatting</p>
+                        <p style="font-size: 13px; color: #CBD5E1;">Search for a user on the left to begin</p>
+                    </div>
+                `;
+                currentUserId = null;
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function setupAutoRefresh() {
+        // Update unread count every 30 seconds
+        setInterval(() => {
+            fetch('{% url 'get_unread_count' %}')
+                .then(response => response.json())
+                .then(data => {
+                    // Update badge if needed
+                    updateUnreadBadge(data.unread_count);
+                });
+        }, 30000);
+    }
+
+    function updateUnreadBadge(count) {
+        // This could update a navbar badge
+        if (count > 0) {
+            console.log('Unread messages:', count);
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    console.log('Messaging system loaded');
+</script>
+{% endblock %}
