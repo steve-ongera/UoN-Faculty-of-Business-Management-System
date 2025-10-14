@@ -649,3 +649,180 @@ def student_announcement_detail(request, pk):
         return redirect('student_announcements_list')
 
 
+
+# views.py - Student Events Views
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.utils import timezone
+from django.contrib import messages
+from .models import Event, EventRegistration, Student, Programme
+
+@login_required(login_url='login')
+def student_events_list(request):
+    """List all upcoming events for students"""
+    # Get current student
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    # Get student's programme
+    student_programme = student.programme
+    
+    # Base queryset - events for student's programme or general events
+    events = Event.objects.filter(
+        Q(target_programmes=student_programme) | Q(target_programmes__isnull=True),
+        event_date__gte=timezone.now().date(),
+        is_published=True
+    ).distinct().order_by('event_date', 'start_time')
+    
+    # Search functionality
+    search_query = request.GET.get('search', '')
+    if search_query:
+        events = events.filter(
+            Q(title__icontains=search_query) | 
+            Q(description__icontains=search_query)
+        )
+    
+    # Filter by event type
+    event_type_filter = request.GET.get('event_type', '')
+    if event_type_filter:
+        events = events.filter(event_type=event_type_filter)
+    
+    # Filter by mandatory status
+    mandatory_filter = request.GET.get('mandatory', '')
+    if mandatory_filter == 'true':
+        events = events.filter(is_mandatory=True)
+    elif mandatory_filter == 'false':
+        events = events.filter(is_mandatory=False)
+    
+    # Pagination
+    paginator = Paginator(events, 10)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Get registered events for current student
+    registered_events = EventRegistration.objects.filter(
+        student=student
+    ).values_list('event_id', flat=True)
+    
+    # Add registration status to events
+    for event in page_obj:
+        event.is_registered = event.id in registered_events
+        event.can_register = event.max_attendees is None or \
+                           event.registrations.count() < event.max_attendees
+    
+    context = {
+        'page_obj': page_obj,
+        'events': page_obj.object_list,
+        'search_query': search_query,
+        'event_type_filter': event_type_filter,
+        'mandatory_filter': mandatory_filter,
+        'total_events': paginator.count,
+        'event_type_choices': Event.EVENT_TYPES,
+        'registered_events': registered_events,
+    }
+    
+    return render(request, 'student/events/events_list.html', context)
+
+
+@login_required(login_url='login')
+def student_event_detail(request, event_id):
+    """Display event detail and handle registration"""
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    event = get_object_or_404(Event, id=event_id)
+    
+    # Check if student is registered
+    registration = EventRegistration.objects.filter(
+        event=event,
+        student=student
+    ).first()
+    
+    # Check if event is full
+    is_event_full = (event.max_attendees and 
+                     event.registrations.count() >= event.max_attendees)
+    
+    # Check if registration is required but not done
+    can_view = not event.registration_required or registration is not None
+    
+    context = {
+        'event': event,
+        'registration': registration,
+        'is_registered': registration is not None,
+        'is_event_full': is_event_full,
+        'attendee_count': event.registrations.count(),
+        'remaining_slots': max(0, (event.max_attendees or 0) - event.registrations.count()) if event.max_attendees else None,
+        'can_view': can_view,
+    }
+    
+    return render(request, 'student/events/event_detail.html', context)
+
+
+@login_required(login_url='login')
+def register_for_event(request, event_id):
+    """Register student for an event"""
+    if request.method != 'POST':
+        return redirect('student_event_detail', event_id=event_id)
+    
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    event = get_object_or_404(Event, id=event_id)
+    
+    # Check if already registered
+    if EventRegistration.objects.filter(event=event, student=student).exists():
+        messages.warning(request, "You are already registered for this event.")
+        return redirect('student_event_detail', event_id=event_id)
+    
+    # Check if event is full
+    if event.max_attendees and event.registrations.count() >= event.max_attendees:
+        messages.error(request, "This event is full and no longer accepting registrations.")
+        return redirect('student_event_detail', event_id=event_id)
+    
+    # Create registration
+    EventRegistration.objects.create(
+        event=event,
+        student=student
+    )
+    
+    messages.success(request, f"Successfully registered for {event.title}!")
+    return redirect('student_event_detail', event_id=event_id)
+
+
+@login_required(login_url='login')
+def unregister_from_event(request, event_id):
+    """Unregister student from an event"""
+    if request.method != 'POST':
+        return redirect('student_event_detail', event_id=event_id)
+    
+    try:
+        student = Student.objects.get(user=request.user)
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    event = get_object_or_404(Event, id=event_id)
+    
+    registration = EventRegistration.objects.filter(
+        event=event,
+        student=student
+    ).first()
+    
+    if registration:
+        registration.delete()
+        messages.success(request, f"Unregistered from {event.title}.")
+    else:
+        messages.warning(request, "You are not registered for this event.")
+    
+    return redirect('student_event_detail', event_id=event_id)
