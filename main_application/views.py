@@ -1564,3 +1564,107 @@ def get_event_icon(event_type):
         'OTHER': 'bi-calendar-event',
     }
     return icons.get(event_type, 'bi-calendar-event')
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.db.models import Q
+from datetime import datetime, time
+from collections import defaultdict
+from .models import Student, TimetableSlot, Semester
+
+@login_required
+def student_timetable_view(request):
+    """
+    View for students to see their personalized timetable
+    """
+    # Ensure user is a student
+    if request.user.user_type != 'STUDENT':
+        messages.error(request, "Access denied. This page is only for students.")
+        return redirect('student_dashboard')
+    
+    try:
+        student = request.user.student_profile
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    # Get current semester
+    try:
+        current_semester = Semester.objects.get(is_current=True)
+    except Semester.DoesNotExist:
+        current_semester = None
+    
+    # Get timetable slots for the student's programme and year level
+    timetable_slots = []
+    if current_semester:
+        timetable_slots = TimetableSlot.objects.filter(
+            programme=student.programme,
+            year_level=student.current_year,
+            unit_allocation__semester=current_semester,
+            is_active=True
+        ).select_related(
+            'unit_allocation__unit',
+            'unit_allocation__lecturer__user',
+            'venue'
+        ).order_by('day_of_week', 'start_time')
+    
+    # Define days of the week in order
+    days_order = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    
+    # Organize slots by day and time
+    timetable_by_day = defaultdict(list)
+    all_time_slots = set()
+    
+    for slot in timetable_slots:
+        timetable_by_day[slot.day_of_week].append(slot)
+        # Create time slot key (e.g., "08:00-10:00")
+        time_key = f"{slot.start_time.strftime('%H:%M')}-{slot.end_time.strftime('%H:%M')}"
+        all_time_slots.add((slot.start_time, slot.end_time, time_key))
+    
+    # Sort time slots
+    sorted_time_slots = sorted(list(all_time_slots), key=lambda x: x[0])
+    
+    # Create a structured timetable grid
+    timetable_grid = {}
+    for day in days_order:
+        timetable_grid[day] = {}
+        for start_time, end_time, time_key in sorted_time_slots:
+            timetable_grid[day][time_key] = None
+    
+    # Fill in the timetable grid
+    for slot in timetable_slots:
+        time_key = f"{slot.start_time.strftime('%H:%M')}-{slot.end_time.strftime('%H:%M')}"
+        if slot.day_of_week in timetable_grid and time_key in timetable_grid[slot.day_of_week]:
+            timetable_grid[slot.day_of_week][time_key] = {
+                'unit_code': slot.unit_allocation.unit.code,
+                'unit_name': slot.unit_allocation.unit.name,
+                'lecturer': slot.unit_allocation.lecturer.user.get_full_name(),
+                'venue': slot.venue.code,
+                'venue_name': slot.venue.name,
+                'start_time': slot.start_time.strftime('%H:%M'),
+                'end_time': slot.end_time.strftime('%H:%M'),
+            }
+    
+    # Calculate statistics
+    total_classes = len(timetable_slots)
+    unique_units = len(set([slot.unit_allocation.unit for slot in timetable_slots]))
+    
+    # Count classes per day
+    classes_per_day = {}
+    for day in days_order:
+        classes_per_day[day] = len(timetable_by_day.get(day, []))
+    
+    context = {
+        'student': student,
+        'current_semester': current_semester,
+        'timetable_slots': timetable_slots,
+        'timetable_grid': timetable_grid,
+        'days_order': days_order,
+        'sorted_time_slots': sorted_time_slots,
+        'total_classes': total_classes,
+        'unique_units': unique_units,
+        'classes_per_day': classes_per_day,
+    }
+    
+    return render(request, 'student/timetable.html', context)
