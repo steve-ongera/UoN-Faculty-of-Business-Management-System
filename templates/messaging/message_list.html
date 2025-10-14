@@ -757,13 +757,45 @@
     }
 
     function renderChatThread(data) {
+        // Check if there's an error in the response
+        if (!data || data.error) {
+            console.error('Error from server:', data?.error || 'Unknown error');
+            const chatSection = document.getElementById('chatSection');
+            chatSection.innerHTML = `
+                <div class="empty-chat">
+                    <div class="empty-chat-icon">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    <p class="empty-chat-text">Error loading conversation</p>
+                    <p style="font-size: 13px; color: #CBD5E1;">${data?.error || 'Please try again'}</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Check if profile_info exists
+        if (!data.profile_info) {
+            console.error('No profile info in response:', data);
+            const chatSection = document.getElementById('chatSection');
+            chatSection.innerHTML = `
+                <div class="empty-chat">
+                    <div class="empty-chat-icon">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    <p class="empty-chat-text">Error loading user profile</p>
+                    <p style="font-size: 13px; color: #CBD5E1;">User profile data not found</p>
+                </div>
+            `;
+            return;
+        }
+
         const chatSection = document.getElementById('chatSection');
         const template = document.getElementById('chatThreadTemplate');
         const clone = template.content.cloneNode(true);
 
         // Set user info
-        clone.querySelector('#chatUserName').textContent = data.profile_info.name;
-        clone.querySelector('#userTypeBadge').textContent = data.profile_info.user_type;
+        clone.querySelector('#chatUserName').textContent = data.profile_info.name || 'Unknown';
+        clone.querySelector('#userTypeBadge').textContent = data.profile_info.user_type || 'User';
         clone.querySelector('#userEmail').innerHTML = `<i class="bi bi-envelope"></i> ${data.profile_info.email || 'N/A'}`;
 
         let identifier = '';
