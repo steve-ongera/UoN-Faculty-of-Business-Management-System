@@ -1,0 +1,479 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Admin Dashboard - Faculty Management System{% endblock %}
+
+{% block page_title %}Dashboard Overview{% endblock %}
+
+{% block breadcrumb %}Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 24px;
+        margin-bottom: 30px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 16px;
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+
+    .stat-icon.blue {
+        background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+        color: white;
+    }
+
+    .stat-icon.green {
+        background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+        color: white;
+    }
+
+    .stat-icon.orange {
+        background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+        color: white;
+    }
+
+    .stat-icon.purple {
+        background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+        color: white;
+    }
+
+    .stat-trend {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+
+    .stat-trend.up {
+        color: #10B981;
+        background: #D1FAE5;
+    }
+
+    .stat-trend.down {
+        color: #EF4444;
+        background: #FEE2E2;
+    }
+
+    .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 4px;
+    }
+
+    .stat-label {
+        color: #64748B;
+        font-size: 14px;
+    }
+
+    .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+    }
+
+    .chart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+
+    .chart-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .chart-filters {
+        display: flex;
+        gap: 8px;
+    }
+
+    .filter-btn {
+        padding: 6px 16px;
+        border: 1px solid #E2E8F0;
+        background: white;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .filter-btn.active {
+        background: #4F46E5;
+        color: white;
+        border-color: #4F46E5;
+    }
+
+    .filter-btn:hover:not(.active) {
+        border-color: #4F46E5;
+        color: #4F46E5;
+    }
+
+    .activity-list {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .activity-item {
+        display: flex;
+        gap: 16px;
+        padding: 16px 0;
+        border-bottom: 1px solid #E2E8F0;
+    }
+
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+
+    .activity-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 16px;
+    }
+
+    .activity-icon.info {
+        background: #DBEAFE;
+        color: #1E40AF;
+    }
+
+    .activity-icon.success {
+        background: #D1FAE5;
+        color: #065F46;
+    }
+
+    .activity-icon.warning {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+
+    .activity-content {
+        flex: 1;
+    }
+
+    .activity-title {
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 4px;
+    }
+
+    .activity-description {
+        font-size: 14px;
+        color: #64748B;
+    }
+
+    .activity-time {
+        font-size: 12px;
+        color: #94A3B8;
+    }
+
+    .grid-2 {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 24px;
+    }
+
+    @media (max-width: 1024px) {
+        .grid-2 {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Statistics Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon blue">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-trend up">
+                <i class="fas fa-arrow-up"></i>
+                11.01%
+            </div>
+        </div>
+        <div class="stat-value">{{ total_users|default:"0" }}</div>
+        <div class="stat-label">Total Users</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon green">
+                <i class="fas fa-user-graduate"></i>
+            </div>
+            <div class="stat-trend up">
+                <i class="fas fa-arrow-up"></i>
+                8.5%
+            </div>
+        </div>
+        <div class="stat-value">{{ total_students|default:"0" }}</div>
+        <div class="stat-label">Active Students</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon orange">
+                <i class="fas fa-chalkboard-teacher"></i>
+            </div>
+            <div class="stat-trend down">
+                <i class="fas fa-arrow-down"></i>
+                2.3%
+            </div>
+        </div>
+        <div class="stat-value">{{ total_lecturers|default:"0" }}</div>
+        <div class="stat-label">Lecturers</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon purple">
+                <i class="fas fa-book"></i>
+            </div>
+            <div class="stat-trend up">
+                <i class="fas fa-arrow-up"></i>
+                5.2%
+            </div>
+        </div>
+        <div class="stat-value">{{ total_programmes|default:"0" }}</div>
+        <div class="stat-label">Active Programmes</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Chart Section -->
+    <div class="chart-container">
+        <div class="chart-header">
+            <h3 class="chart-title">Student Enrollment Trend</h3>
+            <div class="chart-filters">
+                <button class="filter-btn active">Monthly</button>
+                <button class="filter-btn">Quarterly</button>
+                <button class="filter-btn">Annually</button>
+            </div>
+        </div>
+        <canvas id="enrollmentChart" height="80"></canvas>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="activity-list">
+        <h3 class="chart-title" style="margin-bottom: 20px;">Recent Activity</h3>
+        
+        <div class="activity-item">
+            <div class="activity-icon success">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <div class="activity-content">
+                <div class="activity-title">New Student Registered</div>
+                <div class="activity-description">John Doe enrolled in Computer Science</div>
+                <div class="activity-time">2 hours ago</div>
+            </div>
+        </div>
+
+        <div class="activity-item">
+            <div class="activity-icon info">
+                <i class="fas fa-clipboard-check"></i>
+            </div>
+            <div class="activity-content">
+                <div class="activity-title">Grades Submitted</div>
+                <div class="activity-description">Dr. Smith submitted marks for BBIT 101</div>
+                <div class="activity-time">5 hours ago</div>
+            </div>
+        </div>
+
+        <div class="activity-item">
+            <div class="activity-icon warning">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="activity-content">
+                <div class="activity-title">Payment Reminder</div>
+                <div class="activity-description">50 students have pending fee balances</div>
+                <div class="activity-time">1 day ago</div>
+            </div>
+        </div>
+
+        <div class="activity-item">
+            <div class="activity-icon success">
+                <i class="fas fa-calendar-check"></i>
+            </div>
+            <div class="activity-content">
+                <div class="activity-title">Timetable Updated</div>
+                <div class="activity-description">Semester 1 timetable has been published</div>
+                <div class="activity-time">2 days ago</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Additional Info Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon blue">
+                <i class="fas fa-building"></i>
+            </div>
+        </div>
+        <div class="stat-value">{{ total_departments|default:"0" }}</div>
+        <div class="stat-label">Departments</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon green">
+                <i class="fas fa-user-shield"></i>
+            </div>
+        </div>
+        <div class="stat-value">{{ active_sessions|default:"0" }}</div>
+        <div class="stat-label">Active Sessions</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon orange">
+                <i class="fas fa-check-circle"></i>
+            </div>
+        </div>
+        <div class="stat-value">{{ system_health.uptime|default:"99.9%" }}</div>
+        <div class="stat-label">System Uptime</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon purple">
+                <i class="fas fa-calendar-alt"></i>
+            </div>
+        </div>
+        <div class="stat-value">{{ current_semester.semester_number|default:"N/A" }}</div>
+        <div class="stat-label">Current Semester</div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+    // Enrollment Trend Chart
+    const ctx = document.getElementById('enrollmentChart');
+    
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [{
+                    label: 'Enrollments',
+                    data: [120, 190, 300, 250, 200, 300, 350, 280, 400, 380, 420, 450],
+                    borderColor: '#4F46E5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#4F46E5',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(30, 41, 59, 0.9)',
+                        padding: 12,
+                        borderRadius: 8,
+                        titleFont: {
+                            size: 14,
+                            weight: '600'
+                        },
+                        bodyFont: {
+                            size: 13
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#F1F5F9',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: '#64748B',
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: '#64748B',
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Filter buttons functionality
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+</script>
+{% endblock %}
