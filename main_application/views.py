@@ -1673,7 +1673,7 @@ def student_timetable_view(request):
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.db.models import Q, Max, F
+from django.db.models import Q, Max, F, Prefetch
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.core.paginator import Paginator
@@ -1690,26 +1690,37 @@ from .models import User, Message, MessageReadStatus, Student, Lecturer
 def messaging_list(request):
     """
     Main messaging page - shows conversation list and chat area
+    SQLite compatible version (no DISTINCT ON)
     """
     user = request.user
     
-    # Get all conversations (latest message with each user)
-    conversations = Message.objects.filter(
+    # Get all messages involving this user
+    all_messages = Message.objects.filter(
         Q(sender=user) | Q(recipients=user)
-    ).distinct('sender', 'recipients').select_related(
-        'sender', 'sender__student_profile', 'sender__lecturer_profile'
-    ).order_by('-sent_at')
+    ).select_related('sender').prefetch_related('recipients').order_by('-sent_at')
     
-    # Get unique conversation partners
+    # Get unique conversation partners manually (SQLite compatible)
     conversation_partners = {}
-    for msg in conversations:
-        partner = msg.sender if msg.sender != user else msg.recipients.first()
-        if partner and partner not in conversation_partners:
-            conversation_partners[partner] = msg
+    for msg in all_messages:
+        # Determine who the other person is
+        if msg.sender == user:
+            partner = msg.recipients.first()
+        else:
+            partner = msg.sender
+        
+        # Only add if we haven't seen this partner yet
+        if partner and partner.id not in conversation_partners:
+            conversation_partners[partner.id] = {
+                'user': partner,
+                'last_message': msg,
+            }
     
-    # Prepare conversation list with last message info
+    # Build conversation list with unread counts
     conversation_list = []
-    for partner, last_msg in conversation_partners.items():
+    for partner_id, conv_data in conversation_partners.items():
+        partner = conv_data['user']
+        last_msg = conv_data['last_message']
+        
         unread_count = MessageReadStatus.objects.filter(
             message__sender=partner,
             recipient=user,
@@ -1741,7 +1752,7 @@ def message_thread(request, user_id):
     other_user = get_object_or_404(User, id=user_id)
     
     if current_user == other_user:
-        return redirect('messaging_list')
+        return redirect('messaging:messaging_list')
     
     # Get all messages between these two users
     messages = Message.objects.filter(
@@ -1752,7 +1763,6 @@ def message_thread(request, user_id):
     # Mark messages as read
     MessageReadStatus.objects.filter(
         message__sender=other_user,
-        message__recipients=current_user,
         recipient=current_user,
         is_read=False
     ).update(is_read=True, read_at=timezone.now())
@@ -1815,11 +1825,18 @@ def send_message(request, user_id):
     if current_user == recipient:
         return JsonResponse({'error': 'Cannot message yourself'}, status=400)
     
-    data = json.loads(request.body)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    
     body = data.get('message', '').strip()
     
     if not body:
         return JsonResponse({'error': 'Message cannot be empty'}, status=400)
+    
+    if len(body) > 5000:
+        return JsonResponse({'error': 'Message is too long'}, status=400)
     
     # Create message
     message = Message.objects.create(
@@ -1864,14 +1881,50 @@ def search_users(request):
         return JsonResponse({'users': []})
     
     # Search by name, email, or registration number
+    # Split the query to search first name and last name separately
     users = User.objects.filter(
         ~Q(id=current_user.id),
         Q(first_name__icontains=query) |
         Q(last_name__icontains=query) |
-        Q(email__icontains=query) |
-        Q(student_profile__registration_number__icontains=query) |
-        Q(lecturer_profile__staff_number__icontains=query)
-    ).distinct()[:10]
+        Q(email__icontains=query)
+    ).select_related('student_profile', 'lecturer_profile').distinct()[:10]
+    
+    # Also search by registration/staff number if query looks like it
+    if len(query) >= 2:
+        try:
+            from django.db.models import Prefetch
+            student_users = User.objects.filter(
+                ~Q(id=current_user.id),
+                student_profile__registration_number__icontains=query
+            ).select_related('student_profile')[:5]
+            
+            lecturer_users = User.objects.filter(
+                ~Q(id=current_user.id),
+                lecturer_profile__staff_number__icontains=query
+            ).select_related('lecturer_profile')[:5]
+            
+            # Combine results
+            user_ids = set()
+            combined_users = []
+            
+            for u in users:
+                if u.id not in user_ids:
+                    combined_users.append(u)
+                    user_ids.add(u.id)
+            
+            for u in student_users:
+                if u.id not in user_ids:
+                    combined_users.append(u)
+                    user_ids.add(u.id)
+                    
+            for u in lecturer_users:
+                if u.id not in user_ids:
+                    combined_users.append(u)
+                    user_ids.add(u.id)
+            
+            users = combined_users[:10]
+        except:
+            pass
     
     users_data = []
     for user in users:
@@ -1884,9 +1937,15 @@ def search_users(request):
         }
         
         if user.user_type == 'STUDENT' and hasattr(user, 'student_profile'):
-            user_info['identifier'] = user.student_profile.registration_number
+            try:
+                user_info['identifier'] = user.student_profile.registration_number
+            except:
+                pass
         elif user.user_type == 'LECTURER' and hasattr(user, 'lecturer_profile'):
-            user_info['identifier'] = user.lecturer_profile.staff_number
+            try:
+                user_info['identifier'] = user.lecturer_profile.staff_number
+            except:
+                pass
         
         users_data.append(user_info)
     
@@ -1899,20 +1958,23 @@ def mark_as_read(request, message_id):
     """
     Mark a message as read (AJAX)
     """
-    message = get_object_or_404(Message, id=message_id)
-    
-    read_status = MessageReadStatus.objects.filter(
-        message=message,
-        recipient=request.user
-    ).first()
-    
-    if read_status:
-        read_status.is_read = True
-        read_status.read_at = timezone.now()
-        read_status.save()
-        return JsonResponse({'success': True})
-    
-    return JsonResponse({'error': 'Read status not found'}, status=404)
+    try:
+        message = get_object_or_404(Message, id=message_id)
+        
+        read_status = MessageReadStatus.objects.filter(
+            message=message,
+            recipient=request.user
+        ).first()
+        
+        if read_status:
+            read_status.is_read = True
+            read_status.read_at = timezone.now()
+            read_status.save()
+            return JsonResponse({'success': True})
+        
+        return JsonResponse({'error': 'Read status not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @login_required
@@ -1921,12 +1983,15 @@ def get_unread_count(request):
     """
     Get total unread message count (AJAX)
     """
-    unread_count = MessageReadStatus.objects.filter(
-        recipient=request.user,
-        is_read=False
-    ).count()
-    
-    return JsonResponse({'unread_count': unread_count})
+    try:
+        unread_count = MessageReadStatus.objects.filter(
+            recipient=request.user,
+            is_read=False
+        ).count()
+        
+        return JsonResponse({'unread_count': unread_count})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @login_required
@@ -1935,13 +2000,16 @@ def delete_conversation(request, user_id):
     """
     Delete a conversation (AJAX)
     """
-    current_user = request.user
-    other_user = get_object_or_404(User, id=user_id)
-    
-    # Delete messages between these users
-    Message.objects.filter(
-        Q(sender=current_user, recipients=other_user) |
-        Q(sender=other_user, recipients=current_user)
-    ).delete()
-    
-    return JsonResponse({'success': True})
+    try:
+        current_user = request.user
+        other_user = get_object_or_404(User, id=user_id)
+        
+        # Delete messages between these users
+        Message.objects.filter(
+            Q(sender=current_user, recipients=other_user) |
+            Q(sender=other_user, recipients=current_user)
+        ).delete()
+        
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
