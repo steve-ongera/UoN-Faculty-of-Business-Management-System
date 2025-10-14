@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
+from .models import *
 
 
 @csrf_protect
@@ -524,3 +525,127 @@ def get_recent_system_activities():
     """Get recent system activities."""
     # This is a placeholder - implement actual activity logging
     return []
+
+# ========================
+#student views.py
+# No changes made to this file
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.cache import never_cache
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.utils import timezone
+
+
+@login_required
+@never_cache
+def student_announcements_list(request):
+    """
+    List all announcements visible to the student.
+    Announcements are filtered based on student's programme.
+    """
+    if request.user.user_type != 'STUDENT':
+        return redirect('student_dashboard')
+    
+    try:
+        student = request.user.student_profile
+        
+        # Get announcements for student's programme
+        announcements = Announcement.objects.filter(
+            is_published=True,
+            publish_date__lte=timezone.now()
+        ).filter(
+            Q(target_programmes=student.programme) | Q(target_programmes__isnull=True)
+        ).order_by('-publish_date').distinct()
+        
+        # Search functionality
+        search_query = request.GET.get('search', '')
+        if search_query:
+            announcements = announcements.filter(
+                Q(title__icontains=search_query) | Q(content__icontains=search_query)
+            )
+        
+        # Filter by priority
+        priority_filter = request.GET.get('priority', '')
+        if priority_filter:
+            announcements = announcements.filter(priority=priority_filter)
+        
+        # Pagination
+        paginator = Paginator(announcements, 10)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        context = {
+            'page_obj': page_obj,
+            'announcements': page_obj.object_list,
+            'search_query': search_query,
+            'priority_filter': priority_filter,
+            'priorities': [
+                ('LOW', 'Low'),
+                ('NORMAL', 'Normal'),
+                ('HIGH', 'High'),
+                ('URGENT', 'Urgent'),
+            ],
+            'total_announcements': announcements.count(),
+        }
+        
+        return render(request, 'student/announcements/announcements_list.html', context)
+    
+    except Exception as e:
+        from django.contrib import messages
+        messages.error(request, f'Error loading announcements: {str(e)}')
+        return redirect('student_dashboard')
+
+
+@login_required
+@never_cache
+def student_announcement_detail(request, pk):
+    """
+    Display detailed view of a single announcement.
+    Only shows announcements visible to student's programme.
+    """
+    if request.user.user_type != 'STUDENT':
+        return redirect('student_dashboard')
+    
+    try:
+        student = request.user.student_profile
+        
+        # Get announcement and verify access
+        announcement = get_object_or_404(
+            Announcement,
+            pk=pk,
+            is_published=True,
+            publish_date__lte=timezone.now()
+        )
+        
+        # Check if announcement is for student's programme
+        if announcement.target_programmes.exists():
+            if student.programme not in announcement.target_programmes.all():
+                return redirect('student_announcements_list')
+        
+        # Check if announcement has expired
+        if announcement.expiry_date and announcement.expiry_date < timezone.now():
+            from django.contrib import messages
+            messages.warning(request, 'This announcement has expired.')
+            return redirect('student_announcements_list')
+        
+        # Get related announcements (same programme)
+        related_announcements = Announcement.objects.filter(
+            is_published=True,
+            publish_date__lte=timezone.now(),
+            target_programmes=student.programme
+        ).exclude(pk=pk).order_by('-publish_date')[:5]
+        
+        context = {
+            'announcement': announcement,
+            'related_announcements': related_announcements,
+        }
+        
+        return render(request, 'student/announcements/announcement_detail.html', context)
+    
+    except Exception as e:
+        from django.contrib import messages
+        messages.error(request, f'Error loading announcement: {str(e)}')
+        return redirect('student_announcements_list')
+
+
