@@ -1118,3 +1118,84 @@ def my_programme(request):
     }
     
     return render(request, 'student/programme/view_curriculum.html', context)
+
+
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
+from django.db import transaction
+from .models import Student, User
+from .forms import StudentProfileForm, UserProfileForm
+
+@login_required
+def student_profile_view(request):
+    """
+    Combined view for viewing and editing student profile
+    """
+    # Ensure user is a student
+    if request.user.user_type != 'STUDENT':
+        messages.error(request, "Access denied. This page is only for students.")
+        return redirect('student_dashboard')
+    
+    try:
+        student = request.user.student_profile
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    # Handle form submission
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'update_profile':
+            user_form = UserProfileForm(request.POST, request.FILES, instance=request.user)
+            student_form = StudentProfileForm(request.POST, instance=student)
+            
+            if user_form.is_valid() and student_form.is_valid():
+                try:
+                    with transaction.atomic():
+                        user_form.save()
+                        student_form.save()
+                    messages.success(request, "Profile updated successfully!")
+                    return redirect('student_profile')
+                except Exception as e:
+                    messages.error(request, f"Error updating profile: {str(e)}")
+            else:
+                messages.error(request, "Please correct the errors below.")
+        
+        elif action == 'change_password':
+            password_form = PasswordChangeForm(request.user, request.POST)
+            if password_form.is_valid():
+                user = password_form.save()
+                update_session_auth_hash(request, user)  # Keep user logged in
+                messages.success(request, "Your password was successfully updated!")
+                return redirect('student_profile')
+            else:
+                messages.error(request, "Please correct the password errors below.")
+                # Pass the form with errors to the context
+                context = {
+                    'student': student,
+                    'user_form': UserProfileForm(instance=request.user),
+                    'student_form': StudentProfileForm(instance=student),
+                    'password_form': password_form,
+                    'show_password_modal': True
+                }
+                return render(request, 'student/profile.html', context)
+    
+    
+    # GET request - display forms
+    user_form = UserProfileForm(instance=request.user)
+    student_form = StudentProfileForm(instance=student)
+    password_form = PasswordChangeForm(request.user)
+    
+    context = {
+        'student': student,
+        'user_form': user_form,
+        'student_form': student_form,
+        'password_form': password_form,
+        'show_password_modal': False
+    }
+    
+    return render(request, 'student/profile.html', context)

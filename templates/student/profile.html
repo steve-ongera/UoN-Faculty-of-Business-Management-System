@@ -1,0 +1,861 @@
+{% extends 'student_base.html' %}
+
+{% block title %}My Profile - Faculty Management System{% endblock %}
+
+{% block page_title %}My Profile{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .alert-success {
+        background: #D1FAE5;
+        color: #065F46;
+        border: 1px solid #A7F3D0;
+    }
+
+    .alert-error {
+        background: #FEE2E2;
+        color: #991B1B;
+        border: 1px solid #FECACA;
+    }
+
+    .profile-header {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+        padding: 30px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 5px;
+        margin-bottom: 30px;
+        color: white;
+    }
+
+    .profile-avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 4px solid white;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .default-avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        color: #667eea;
+        border: 4px solid white;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .profile-info h2 {
+        margin: 0 0 10px 0;
+        font-size: 28px;
+    }
+
+    .profile-meta {
+        display: flex;
+        gap: 20px;
+        font-size: 14px;
+        opacity: 0.9;
+    }
+
+    .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .tabs-container {
+        border-bottom: 2px solid #E2E8F0;
+        margin-bottom: 30px;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 0;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .tab-btn {
+        padding: 12px 24px;
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: #64748B;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .tab-btn:hover {
+        color: #4F46E5;
+        background: #F8FAFC;
+    }
+
+    .tab-btn.active {
+        color: #4F46E5;
+        border-bottom-color: #4F46E5;
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .info-card {
+        background: #F8FAFC;
+        padding: 20px;
+        border-radius: 5px;
+        border: 1px solid #E2E8F0;
+    }
+
+    .info-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748B;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+
+    .info-value {
+        font-size: 15px;
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .form-section {
+        margin-bottom: 30px;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 6px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .form-help {
+        font-size: 12px;
+        color: #94A3B8;
+        margin-top: 4px;
+    }
+
+    .form-error {
+        font-size: 12px;
+        color: #DC2626;
+        margin-top: 4px;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+        transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+        background: #F1F5F9;
+        color: #64748B;
+    }
+
+    .btn-secondary:hover {
+        background: #E2E8F0;
+    }
+
+    .btn-danger {
+        background: #DC2626;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #B91C1C;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid #E2E8F0;
+    }
+
+    .readonly-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        background: #E0E7FF;
+        color: #3730A3;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-left: 8px;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 5px;
+        padding: 30px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .modal-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #64748B;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-close:hover {
+        color: #1E293B;
+    }
+
+    @media (max-width: 768px) {
+        .profile-header {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">My Profile</li>
+    </ol>
+</nav>
+
+<!-- Messages -->
+{% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">
+        <i class="bi bi-{% if message.tags == 'success' %}check-circle{% else %}exclamation-circle{% endif %}"></i>
+        {{ message }}
+    </div>
+    {% endfor %}
+{% endif %}
+
+<div class="section-container">
+    <!-- Profile Header -->
+    <div class="profile-header">
+        {% if user.profile_picture %}
+        <img src="{{ user.profile_picture.url }}" alt="Profile" class="profile-avatar">
+        {% else %}
+        <div class="default-avatar">
+            <i class="bi bi-person"></i>
+        </div>
+        {% endif %}
+        
+        <div class="profile-info">
+            <h2>{{ student.first_name }} {{ student.surname }} {{ student.last_name }}</h2>
+            <div class="profile-meta">
+                <span class="meta-item">
+                    <i class="bi bi-card-text"></i>
+                    {{ student.registration_number }}
+                </span>
+                <span class="meta-item">
+                    <i class="bi bi-book"></i>
+                    {{ student.programme.name }}
+                </span>
+                <span class="meta-item">
+                    <i class="bi bi-layers"></i>
+                    Year {{ student.current_year }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-container">
+        <ul class="tabs">
+            <li><button class="tab-btn active" data-tab="view">View Profile</button></li>
+            <li><button class="tab-btn" data-tab="edit">Edit Profile</button></li>
+        </ul>
+    </div>
+
+    <!-- View Profile Tab -->
+    <div class="tab-content active" id="view-tab">
+        <div class="form-section">
+            <h3 class="section-title"><i class="bi bi-info-circle"></i> Personal Information</h3>
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">Full Name</div>
+                    <div class="info-value">{{ student.first_name }} {{ student.surname }} {{ student.last_name }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Registration Number</div>
+                    <div class="info-value">{{ student.registration_number }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Email Address</div>
+                    <div class="info-value">{{ student.email|default:"Not provided" }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Phone Number</div>
+                    <div class="info-value">{{ student.phone|default:"Not provided" }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Date of Birth</div>
+                    <div class="info-value">{{ student.date_of_birth|date:"d M Y"|default:"Not provided" }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Current Address</div>
+                    <div class="info-value">{{ student.address|default:"Not provided" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3 class="section-title"><i class="bi bi-mortarboard"></i> Academic Information</h3>
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">Programme</div>
+                    <div class="info-value">{{ student.programme.name }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Programme Code</div>
+                    <div class="info-value">{{ student.programme.code }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Department</div>
+                    <div class="info-value">{{ student.programme.department.name }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Current Year</div>
+                    <div class="info-value">Year {{ student.current_year }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Intake</div>
+                    <div class="info-value">{{ student.intake.name }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Admission Date</div>
+                    <div class="info-value">{{ student.admission_date|date:"d M Y" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3 class="section-title"><i class="bi bi-people"></i> Parent/Guardian Information</h3>
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">Parent Name</div>
+                    <div class="info-value">{{ student.parent_name|default:"Not provided" }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Parent Phone</div>
+                    <div class="info-value">{{ student.parent_phone|default:"Not provided" }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Guardian Name</div>
+                    <div class="info-value">{{ student.guardian_name|default:"Not provided" }}</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Guardian Phone</div>
+                    <div class="info-value">{{ student.guardian_phone|default:"Not provided" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Profile Tab -->
+    <div class="tab-content" id="edit-tab">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_profile">
+
+            <div class="form-section">
+                <h3 class="section-title"><i class="bi bi-person-circle"></i> Account Information</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">Username <span class="readonly-badge">Read Only</span></label>
+                    <input type="text" class="form-control" value="{{ user.username }}" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Registration Number <span class="readonly-badge">Read Only</span></label>
+                    <input type="text" class="form-control" value="{{ student.registration_number }}" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ user_form.email.id_for_label }}">
+                        {{ user_form.email.label }}
+                    </label>
+                    {{ user_form.email }}
+                    {% if user_form.email.help_text %}
+                    <div class="form-help">{{ user_form.email.help_text }}</div>
+                    {% endif %}
+                    {% if user_form.email.errors %}
+                    <div class="form-error">{{ user_form.email.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ user_form.phone_number.id_for_label }}">
+                        {{ user_form.phone_number.label }}
+                    </label>
+                    {{ user_form.phone_number }}
+                    {% if user_form.phone_number.help_text %}
+                    <div class="form-help">{{ user_form.phone_number.help_text }}</div>
+                    {% endif %}
+                    {% if user_form.phone_number.errors %}
+                    <div class="form-error">{{ user_form.phone_number.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ user_form.profile_picture.id_for_label }}">
+                        {{ user_form.profile_picture.label }}
+                    </label>
+                    {% if user.profile_picture %}
+                    <div style="margin-bottom: 10px;">
+                        <img src="{{ user.profile_picture.url }}" alt="Current" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #E2E8F0;">
+                    </div>
+                    {% endif %}
+                    {{ user_form.profile_picture }}
+                    {% if user_form.profile_picture.help_text %}
+                    <div class="form-help">{{ user_form.profile_picture.help_text }}</div>
+                    {% endif %}
+                    {% if user_form.profile_picture.errors %}
+                    <div class="form-error">{{ user_form.profile_picture.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="section-title"><i class="bi bi-person-vcard"></i> Personal Details</h3>
+                
+                <div class="form-group">
+                    <label class="form-label" for="{{ student_form.phone.id_for_label }}">
+                        {{ student_form.phone.label }}
+                    </label>
+                    {{ student_form.phone }}
+                    {% if student_form.phone.errors %}
+                    <div class="form-error">{{ student_form.phone.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ student_form.email.id_for_label }}">
+                        {{ student_form.email.label }}
+                    </label>
+                    {{ student_form.email }}
+                    {% if student_form.email.errors %}
+                    <div class="form-error">{{ student_form.email.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ student_form.date_of_birth.id_for_label }}">
+                        {{ student_form.date_of_birth.label }}
+                    </label>
+                    {{ student_form.date_of_birth }}
+                    {% if student_form.date_of_birth.errors %}
+                    <div class="form-error">{{ student_form.date_of_birth.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ student_form.address.id_for_label }}">
+                        {{ student_form.address.label }}
+                    </label>
+                    {{ student_form.address }}
+                    {% if student_form.address.errors %}
+                    <div class="form-error">{{ student_form.address.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="section-title"><i class="bi bi-people"></i> Parent/Guardian Information</h3>
+                
+                <div class="form-group">
+                    <label class="form-label" for="{{ student_form.parent_name.id_for_label }}">
+                        {{ student_form.parent_name.label }}
+                    </label>
+                    {{ student_form.parent_name }}
+                    {% if student_form.parent_name.errors %}
+                    <div class="form-error">{{ student_form.parent_name.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ student_form.parent_phone.id_for_label }}">
+                        {{ student_form.parent_phone.label }}
+                    </label>
+                    {{ student_form.parent_phone }}
+                    {% if student_form.parent_phone.errors %}
+                    <div class="form-error">{{ student_form.parent_phone.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ student_form.guardian_name.id_for_label }}">
+                        {{ student_form.guardian_name.label }}
+                    </label>
+                    {{ student_form.guardian_name }}
+                    {% if student_form.guardian_name.errors %}
+                    <div class="form-error">{{ student_form.guardian_name.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="{{ student_form.guardian_phone.id_for_label }}">
+                        {{ student_form.guardian_phone.label }}
+                    </label>
+                    {{ student_form.guardian_phone }}
+                    {% if student_form.guardian_phone.errors %}
+                    <div class="form-error">{{ student_form.guardian_phone.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="switchTab('view')">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Save Changes
+                </button>
+            </div>
+        </form>
+
+        <!-- Change Password Section -->
+        <div class="form-section" style="margin-top: 40px; padding-top: 40px; border-top: 3px solid #E2E8F0;">
+            <h3 class="section-title"><i class="bi bi-shield-lock"></i> Security Settings</h3>
+            <p style="color: #64748B; margin-bottom: 20px;">
+                Keep your account secure by using a strong password and changing it regularly.
+            </p>
+            <button type="button" class="btn btn-danger" onclick="openPasswordModal()">
+                <i class="bi bi-key"></i> Change Password
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Password Change Modal -->
+<div class="modal {% if show_password_modal %}active{% endif %}" id="passwordModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title"><i class="bi bi-shield-lock"></i> Change Password</h3>
+            <button type="button" class="modal-close" onclick="closePasswordModal()">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="change_password">
+
+            <div class="form-group">
+                <label class="form-label" for="{{ password_form.old_password.id_for_label }}">
+                    Current Password
+                </label>
+                {{ password_form.old_password }}
+                {% if password_form.old_password.errors %}
+                <div class="form-error">{{ password_form.old_password.errors.0 }}</div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="{{ password_form.new_password1.id_for_label }}">
+                    New Password
+                </label>
+                {{ password_form.new_password1 }}
+                {% if password_form.new_password1.help_text %}
+                <div class="form-help">{{ password_form.new_password1.help_text }}</div>
+                {% endif %}
+                {% if password_form.new_password1.errors %}
+                <div class="form-error">{{ password_form.new_password1.errors.0 }}</div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="{{ password_form.new_password2.id_for_label }}">
+                    Confirm New Password
+                </label>
+                {{ password_form.new_password2 }}
+                {% if password_form.new_password2.errors %}
+                <div class="form-error">{{ password_form.new_password2.errors.0 }}</div>
+                {% endif %}
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closePasswordModal()">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-check-circle"></i> Change Password
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Tab switching functionality
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabName = button.getAttribute('data-tab');
+            switchTab(tabName);
+        });
+    });
+
+    function switchTab(tabName) {
+        // Remove active class from all buttons and contents
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+
+        // Add active class to selected tab
+        const selectedButton = document.querySelector(`[data-tab="${tabName}"]`);
+        const selectedContent = document.getElementById(`${tabName}-tab`);
+
+        if (selectedButton && selectedContent) {
+            selectedButton.classList.add('active');
+            selectedContent.classList.add('active');
+        }
+    }
+
+    // Password modal functions
+    function openPasswordModal() {
+        document.getElementById('passwordModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closePasswordModal() {
+        document.getElementById('passwordModal').classList.remove('active');
+        document.body.style.overflow = 'auto';
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('passwordModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closePasswordModal();
+        }
+    });
+
+    // Auto-open password modal if there are errors
+    {% if show_password_modal %}
+    openPasswordModal();
+    {% endif %}
+
+    // Profile picture preview
+    const profilePictureInput = document.querySelector('input[type="file"][name="profile_picture"]');
+    if (profilePictureInput) {
+        profilePictureInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const preview = document.querySelector('img[alt="Current"]');
+                    if (preview) {
+                        preview.src = event.target.result;
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    // Form validation
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const requiredFields = form.querySelectorAll('[required]');
+            let isValid = true;
+
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    isValid = false;
+                    field.style.borderColor = '#DC2626';
+                } else {
+                    field.style.borderColor = '#E2E8F0';
+                }
+            });
+
+            if (!isValid) {
+                e.preventDefault();
+                alert('Please fill in all required fields.');
+            }
+        });
+    });
+
+    console.log('Student profile page loaded');
+</script>
+{% endblock %}
