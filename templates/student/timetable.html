@@ -1,6 +1,6 @@
 {% extends 'student_base.html' %}
 {% load static %}
-
+{% load timetable_filters %}
 {% block title %}My Timetable - Faculty Management System{% endblock %}
 
 {% block page_title %}My Timetable{% endblock %}
@@ -45,7 +45,7 @@
 
     .section-container {
         background: white;
-        border-radius: 8px;
+        border-radius: 6px;
         padding: 30px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         margin-bottom: 30px;
