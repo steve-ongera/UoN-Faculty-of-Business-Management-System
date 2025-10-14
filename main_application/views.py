@@ -1314,3 +1314,253 @@ def student_semester_reporting(request):
     }
     
     return render(request, 'student/semester_reporting.html', context)
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.utils import timezone
+from datetime import datetime, timedelta
+import calendar
+from .models import (
+    Student, Event, Announcement, Semester, 
+    AcademicYear, TimetableSlot
+)
+
+@login_required
+def student_academic_calendar(request):
+    """
+    Academic calendar view showing events, announcements, and important dates
+    """
+    # Ensure user is a student
+    if request.user.user_type != 'STUDENT':
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    
+    try:
+        student = request.user.student_profile
+    except Student.DoesNotExist:
+        return JsonResponse({'error': 'Student profile not found'}, status=404)
+    
+    # Get current date or requested month/year
+    today = timezone.now().date()
+    
+    # Get month and year from query params or use current
+    try:
+        month = int(request.GET.get('month', today.month))
+        year = int(request.GET.get('year', today.year))
+    except (ValueError, TypeError):
+        month = today.month
+        year = today.year
+    
+    # Validate month and year
+    if month < 1 or month > 12:
+        month = today.month
+    if year < 2000 or year > 2100:
+        year = today.year
+    
+    # Get calendar data
+    cal = calendar.monthcalendar(year, month)
+    month_name = calendar.month_name[month]
+    
+    # Get date range for the month
+    first_day = datetime(year, month, 1).date()
+    if month == 12:
+        last_day = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+    else:
+        last_day = datetime(year, month + 1, 1).date() - timedelta(days=1)
+    
+    # Get events for this month targeting student's programme
+    events = Event.objects.filter(
+        event_date__gte=first_day,
+        event_date__lte=last_day,
+        is_published=True
+    ).filter(
+        target_programmes=student.programme
+    ).select_related('venue', 'organizer')
+    
+    # Get announcements published in this month
+    announcements = Announcement.objects.filter(
+        publish_date__date__gte=first_day,
+        publish_date__date__lte=last_day,
+        is_published=True
+    ).filter(
+        target_programmes=student.programme
+    ).select_related('created_by')
+    
+    # Get semesters
+    semesters = Semester.objects.filter(
+        start_date__lte=last_day,
+        end_date__gte=first_day
+    ).select_related('academic_year')
+    
+    # Get timetable slots for the month
+    timetable_slots = TimetableSlot.objects.filter(
+        programme=student.programme,
+        year_level=student.current_year,
+        is_active=True,
+        unit_allocation__semester__start_date__lte=last_day,
+        unit_allocation__semester__end_date__gte=first_day
+    ).select_related(
+        'unit_allocation__unit',
+        'unit_allocation__lecturer__user',
+        'venue'
+    )
+    
+    # Organize data by date
+    calendar_data = {}
+    
+    # Add events
+    for event in events:
+        date_key = event.event_date.strftime('%Y-%m-%d')
+        if date_key not in calendar_data:
+            calendar_data[date_key] = {
+                'events': [],
+                'announcements': [],
+                'semesters': [],
+                'classes': []
+            }
+        calendar_data[date_key]['events'].append({
+            'id': event.id,
+            'title': event.title,
+            'type': event.event_type,
+            'time': event.start_time.strftime('%H:%M'),
+            'venue': event.venue.name if event.venue else 'TBA',
+            'is_mandatory': event.is_mandatory,
+            'icon': get_event_icon(event.event_type)
+        })
+    
+    # Add announcements
+    for announcement in announcements:
+        date_key = announcement.publish_date.date().strftime('%Y-%m-%d')
+        if date_key not in calendar_data:
+            calendar_data[date_key] = {
+                'events': [],
+                'announcements': [],
+                'semesters': [],
+                'classes': []
+            }
+        calendar_data[date_key]['announcements'].append({
+            'id': announcement.id,
+            'title': announcement.title,
+            'priority': announcement.priority,
+            'author': announcement.created_by.get_full_name()
+        })
+    
+    # Add semester start/end dates
+    for semester in semesters:
+        # Start date
+        if first_day <= semester.start_date <= last_day:
+            date_key = semester.start_date.strftime('%Y-%m-%d')
+            if date_key not in calendar_data:
+                calendar_data[date_key] = {
+                    'events': [],
+                    'announcements': [],
+                    'semesters': [],
+                    'classes': []
+                }
+            calendar_data[date_key]['semesters'].append({
+                'title': f'{semester} - Starts',
+                'type': 'start',
+                'semester': str(semester)
+            })
+        
+        # End date
+        if first_day <= semester.end_date <= last_day:
+            date_key = semester.end_date.strftime('%Y-%m-%d')
+            if date_key not in calendar_data:
+                calendar_data[date_key] = {
+                    'events': [],
+                    'announcements': [],
+                    'semesters': [],
+                    'classes': []
+                }
+            calendar_data[date_key]['semesters'].append({
+                'title': f'{semester} - Ends',
+                'type': 'end',
+                'semester': str(semester)
+            })
+        
+        # Registration deadline
+        if first_day <= semester.registration_deadline <= last_day:
+            date_key = semester.registration_deadline.strftime('%Y-%m-%d')
+            if date_key not in calendar_data:
+                calendar_data[date_key] = {
+                    'events': [],
+                    'announcements': [],
+                    'semesters': [],
+                    'classes': []
+                }
+            calendar_data[date_key]['semesters'].append({
+                'title': f'{semester} - Registration Deadline',
+                'type': 'deadline',
+                'semester': str(semester)
+            })
+    
+    # Add class schedule summary (count of classes per day)
+    for slot in timetable_slots:
+        # Get all dates in the month that match this day of week
+        for week in cal:
+            for day in week:
+                if day == 0:  # Skip empty days
+                    continue
+                date_obj = datetime(year, month, day).date()
+                day_name = date_obj.strftime('%A').upper()
+                
+                if day_name == slot.day_of_week:
+                    date_key = date_obj.strftime('%Y-%m-%d')
+                    if date_key not in calendar_data:
+                        calendar_data[date_key] = {
+                            'events': [],
+                            'announcements': [],
+                            'semesters': [],
+                            'classes': []
+                        }
+                    calendar_data[date_key]['classes'].append({
+                        'unit': slot.unit_allocation.unit.code,
+                        'time': slot.start_time.strftime('%H:%M'),
+                        'venue': slot.venue.code
+                    })
+    
+    # Calculate previous and next month
+    if month == 1:
+        prev_month = 12
+        prev_year = year - 1
+    else:
+        prev_month = month - 1
+        prev_year = year
+    
+    if month == 12:
+        next_month = 1
+        next_year = year + 1
+    else:
+        next_month = month + 1
+        next_year = year
+    
+    context = {
+        'student': student,
+        'calendar': cal,
+        'month': month,
+        'year': year,
+        'month_name': month_name,
+        'today': today,
+        'calendar_data': calendar_data,
+        'prev_month': prev_month,
+        'prev_year': prev_year,
+        'next_month': next_month,
+        'next_year': next_year,
+    }
+    
+    return render(request, 'student/academic_calendar.html', context)
+
+
+def get_event_icon(event_type):
+    """Return Bootstrap icon class for event type"""
+    icons = {
+        'SEMINAR': 'bi-people',
+        'WORKSHOP': 'bi-tools',
+        'CONFERENCE': 'bi-briefcase',
+        'MEETING': 'bi-person-video3',
+        'ORIENTATION': 'bi-compass',
+        'EXAMINATION': 'bi-clipboard-check',
+        'OTHER': 'bi-calendar-event',
+    }
+    return icons.get(event_type, 'bi-calendar-event')

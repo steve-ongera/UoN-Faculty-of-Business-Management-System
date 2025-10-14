@@ -1,0 +1,760 @@
+{% extends 'student_base.html' %}
+{% load calendar_filters %}
+
+{% block title %}Academic Calendar - Faculty Management System{% endblock %}
+
+{% block page_title %}Academic Calendar{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    .calendar-nav {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .nav-btn {
+        padding: 8px 16px;
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        color: #64748B;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .nav-btn:hover {
+        background: #4F46E5;
+        color: white;
+        border-color: #4F46E5;
+    }
+
+    .month-year {
+        font-size: 24px;
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .today-btn {
+        padding: 8px 16px;
+        background: #4F46E5;
+        border: none;
+        border-radius: 5px;
+        color: white;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .today-btn:hover {
+        background: #4338CA;
+        transform: translateY(-1px);
+    }
+
+    .calendar-legend {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #F8FAFC;
+        border-radius: 5px;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #64748B;
+    }
+
+    .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    .legend-dot.event {
+        background: #4F46E5;
+    }
+
+    .legend-dot.announcement {
+        background: #F59E0B;
+    }
+
+    .legend-dot.semester {
+        background: #10B981;
+    }
+
+    .legend-dot.class {
+        background: #8B5CF6;
+    }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        background: #E2E8F0;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        overflow: hidden;
+    }
+
+    .calendar-day-header {
+        background: #F8FAFC;
+        padding: 12px;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .calendar-day {
+        background: white;
+        min-height: 120px;
+        padding: 8px;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .calendar-day:hover {
+        background: #F8FAFC;
+        box-shadow: inset 0 0 0 2px #4F46E5;
+    }
+
+    .calendar-day.empty {
+        background: #F8FAFC;
+        cursor: default;
+    }
+
+    .calendar-day.empty:hover {
+        box-shadow: none;
+    }
+
+    .calendar-day.today {
+        background: #EEF2FF;
+        box-shadow: inset 0 0 0 2px #4F46E5;
+    }
+
+    .day-number {
+        font-size: 14px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 6px;
+    }
+
+    .calendar-day.today .day-number {
+        color: #4F46E5;
+    }
+
+    .day-indicators {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+    }
+
+    .indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .indicator.event {
+        background: #4F46E5;
+    }
+
+    .indicator.announcement {
+        background: #F59E0B;
+    }
+
+    .indicator.semester {
+        background: #10B981;
+    }
+
+    .indicator.class {
+        background: #8B5CF6;
+    }
+
+    .day-content {
+        font-size: 11px;
+        color: #64748B;
+        margin-top: 6px;
+        line-height: 1.4;
+    }
+
+    .day-item {
+        padding: 2px 4px;
+        margin-bottom: 3px;
+        border-radius: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .day-item.event {
+        background: #EEF2FF;
+        color: #4338CA;
+    }
+
+    .day-item.announcement {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+
+    .day-item.semester {
+        background: #D1FAE5;
+        color: #065F46;
+    }
+
+    .day-item.class {
+        background: #EDE9FE;
+        color: #6B21A8;
+    }
+
+    /* Modal Styles */
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 5px;
+        padding: 0;
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    .modal-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #64748B;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+        transition: all 0.3s ease;
+    }
+
+    .modal-close:hover {
+        background: #F1F5F9;
+        color: #1E293B;
+    }
+
+    .modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .modal-section {
+        margin-bottom: 25px;
+    }
+
+    .modal-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .modal-section-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .modal-item {
+        background: #F8FAFC;
+        padding: 12px;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        border-left: 3px solid;
+    }
+
+    .modal-item.event {
+        border-left-color: #4F46E5;
+    }
+
+    .modal-item.announcement {
+        border-left-color: #F59E0B;
+    }
+
+    .modal-item.semester {
+        border-left-color: #10B981;
+    }
+
+    .modal-item.class {
+        border-left-color: #8B5CF6;
+    }
+
+    .modal-item-title {
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 4px;
+    }
+
+    .modal-item-meta {
+        font-size: 12px;
+        color: #64748B;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #94A3B8;
+    }
+
+    .loading-spinner {
+        font-size: 32px;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+        .calendar-header {
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .month-year {
+            font-size: 20px;
+        }
+
+        .calendar-legend {
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .calendar-day {
+            min-height: 80px;
+            padding: 6px;
+        }
+
+        .day-number {
+            font-size: 12px;
+        }
+
+        .day-content {
+            display: none;
+        }
+
+        .modal-content {
+            width: 95%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Academic Calendar</li>
+    </ol>
+</nav>
+
+<div class="section-container">
+    <!-- Calendar Header -->
+    <div class="calendar-header">
+        <div class="calendar-nav">
+            <button class="nav-btn" onclick="navigateMonth(-1)">
+                <i class="bi bi-chevron-left"></i> Previous
+            </button>
+            <h2 class="month-year">{{ month_name }} {{ year }}</h2>
+            <button class="nav-btn" onclick="navigateMonth(1)">
+                Next <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+        <button class="today-btn" onclick="goToToday()">
+            <i class="bi bi-calendar-day"></i> Today
+        </button>
+    </div>
+
+    <!-- Legend -->
+    <div class="calendar-legend">
+        <div class="legend-item">
+            <span class="legend-dot event"></span>
+            <span>Events</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-dot announcement"></span>
+            <span>Announcements</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-dot semester"></span>
+            <span>Semester Info</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-dot class"></span>
+            <span>Classes</span>
+        </div>
+    </div>
+
+    <!-- Calendar Grid -->
+    <div class="calendar-grid">
+        <!-- Day Headers -->
+        <div class="calendar-day-header">Sun</div>
+        <div class="calendar-day-header">Mon</div>
+        <div class="calendar-day-header">Tue</div>
+        <div class="calendar-day-header">Wed</div>
+        <div class="calendar-day-header">Thu</div>
+        <div class="calendar-day-header">Fri</div>
+        <div class="calendar-day-header">Sat</div>
+
+        <!-- Calendar Days -->
+        {% for week in calendar %}
+            {% for day in week %}
+                {% if day == 0 %}
+                    <div class="calendar-day empty"></div>
+                {% else %}
+                    {% with date_key=year|stringformat:"04d"|add:"-"|add:month|stringformat:"02d"|add:"-"|add:day|stringformat:"02d" %}
+                    {% with day_info=calendar_data|lookup:date_key %}
+                    <div class="calendar-day {% if year == today.year and month == today.month and day == today.day %}today{% endif %}" 
+                         data-date="{{ date_key }}"
+                         onclick="showDayDetails('{{ date_key }}')">
+                        <div class="day-number">{{ day }}</div>
+                        
+                        {% if day_info %}
+                        <div class="day-indicators">
+                            {% if day_info.events %}
+                                <span class="indicator event"></span>
+                            {% endif %}
+                            {% if day_info.announcements %}
+                                <span class="indicator announcement"></span>
+                            {% endif %}
+                            {% if day_info.semesters %}
+                                <span class="indicator semester"></span>
+                            {% endif %}
+                            {% if day_info.classes %}
+                                <span class="indicator class"></span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="day-content">
+                            {% for event in day_info.events|slice:":2" %}
+                                <div class="day-item event">
+                                    <i class="{{ event.icon }}"></i> {{ event.title|truncatechars:20 }}
+                                </div>
+                            {% endfor %}
+                            
+                            {% for announcement in day_info.announcements|slice:":1" %}
+                                <div class="day-item announcement">
+                                    <i class="bi bi-megaphone"></i> {{ announcement.title|truncatechars:20 }}
+                                </div>
+                            {% endfor %}
+                            
+                            {% for sem in day_info.semesters|slice:":1" %}
+                                <div class="day-item semester">
+                                    <i class="bi bi-calendar-check"></i> {{ sem.title|truncatechars:20 }}
+                                </div>
+                            {% endfor %}
+                            
+                            {% if day_info.classes %}
+                                <div class="day-item class">
+                                    <i class="bi bi-book"></i> {{ day_info.classes|length }} class{% if day_info.classes|length > 1 %}es{% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endwith %}
+                    {% endwith %}
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Day Details Modal -->
+<div class="modal" id="dayModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title" id="modalTitle">Day Details</h3>
+            <button class="modal-close" onclick="closeModal()">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div class="loading">
+                <i class="bi bi-hourglass-split loading-spinner"></i>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Store calendar data
+const calendarData = {{ calendar_data|safe_json }};
+const currentMonth = {{ month }};
+const currentYear = {{ year }};
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Navigation functions
+    function navigateMonth(direction) {
+        let newMonth = {{ month }} + direction;
+        let newYear = {{ year }};
+        
+        if (newMonth > 12) {
+            newMonth = 1;
+            newYear++;
+        } else if (newMonth < 1) {
+            newMonth = 12;
+            newYear--;
+        }
+        
+        window.location.href = `?month=${newMonth}&year=${newYear}`;
+    }
+    
+    function goToToday() {
+        const today = new Date();
+        window.location.href = `?month=${today.getMonth() + 1}&year=${today.getFullYear()}`;
+    }
+    
+    // Show day details in modal
+    function showDayDetails(dateKey) {
+        const modal = document.getElementById('dayModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+        
+        // Format date for display
+        const date = new Date(dateKey);
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        const formattedDate = date.toLocaleDateString('en-US', options);
+        
+        modalTitle.textContent = formattedDate;
+        
+        // Get data for this date
+        const dayData = calendarData[dateKey];
+        
+        if (!dayData || (!dayData.events.length && !dayData.announcements.length && 
+            !dayData.semesters.length && !dayData.classes.length)) {
+            modalBody.innerHTML = '<p style="text-align: center; color: #94A3B8; padding: 40px;">No activities scheduled for this day.</p>';
+        } else {
+            let html = '';
+            
+            // Events
+            if (dayData.events && dayData.events.length > 0) {
+                html += '<div class="modal-section"><div class="modal-section-title"><i class="bi bi-calendar-event"></i> Events</div>';
+                dayData.events.forEach(event => {
+                    html += `
+                        <div class="modal-item event">
+                            <div class="modal-item-title">
+                                <i class="${event.icon}"></i> ${event.title}
+                                ${event.is_mandatory ? '<span style="color: #DC2626; font-size: 11px;">(Mandatory)</span>' : ''}
+                            </div>
+                            <div class="modal-item-meta">
+                                <span><i class="bi bi-clock"></i> ${event.time}</span>
+                                <span><i class="bi bi-geo-alt"></i> ${event.venue}</span>
+                                <span><i class="bi bi-tag"></i> ${event.type}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            // Announcements
+            if (dayData.announcements && dayData.announcements.length > 0) {
+                html += '<div class="modal-section"><div class="modal-section-title"><i class="bi bi-megaphone"></i> Announcements</div>';
+                dayData.announcements.forEach(announcement => {
+                    html += `
+                        <div class="modal-item announcement">
+                            <div class="modal-item-title">
+                                <i class="bi bi-megaphone"></i> ${announcement.title}
+                            </div>
+                            <div class="modal-item-meta">
+                                <span><i class="bi bi-person"></i> ${announcement.author}</span>
+                                <span><i class="bi bi-flag"></i> ${announcement.priority}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            // Semester Information
+            if (dayData.semesters && dayData.semesters.length > 0) {
+                html += '<div class="modal-section"><div class="modal-section-title"><i class="bi bi-calendar-check"></i> Semester Information</div>';
+                dayData.semesters.forEach(sem => {
+                    html += `
+                        <div class="modal-item semester">
+                            <div class="modal-item-title">
+                                <i class="bi bi-mortarboard"></i> ${sem.title}
+                            </div>
+                            <div class="modal-item-meta">
+                                <span><i class="bi bi-info-circle"></i> ${sem.semester}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            // Classes
+            if (dayData.classes && dayData.classes.length > 0) {
+                html += '<div class="modal-section"><div class="modal-section-title"><i class="bi bi-book"></i> Classes (${dayData.classes.length})</div>';
+                dayData.classes.forEach(cls => {
+                    html += `
+                        <div class="modal-item class">
+                            <div class="modal-item-title">
+                                <i class="bi bi-journal-code"></i> ${cls.unit}
+                            </div>
+                            <div class="modal-item-meta">
+                                <span><i class="bi bi-clock"></i> ${cls.time}</span>
+                                <span><i class="bi bi-geo-alt"></i> ${cls.venue}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            modalBody.innerHTML = html;
+        }
+        
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+    
+    // Close modal
+    function closeModal() {
+        const modal = document.getElementById('dayModal');
+        modal.classList.remove('active');
+        document.body.style.overflow = 'auto';
+    }
+    
+    // Close modal when clicking outside
+    document.getElementById('dayModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeModal();
+        }
+    });
+    
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeModal();
+        } else if (e.key === 'ArrowLeft') {
+            navigateMonth(-1);
+        } else if (e.key === 'ArrowRight') {
+            navigateMonth(1);
+        }
+    });
+    
+    console.log('Academic calendar loaded');
+</script>
+{% endblock %}
