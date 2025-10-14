@@ -9,26 +9,34 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 
 <style>
-    .breadcrumb {
-        background: transparent;
-        padding: 0;
-        margin-bottom: 20px;
-        font-size: 14px;
-    }
+   .breadcrumb {
+    padding: 0;
+    margin-bottom: 20px;
+    font-size: 14px;
+    list-style: none;
+    counter-reset: breadcrumb-counter; /* Initialize counter */
+    display: flex;
+    flex-wrap: wrap;
+}
 
     .breadcrumb-item {
         color: #64748B;
+        counter-increment: breadcrumb-counter; /* Increment number */
+        position: relative;
+    }
+
+   
+
+    /* Add slash separator between items */
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ "  ;
+        color: #94A3B8;
+        padding: 0 8px;
     }
 
     .breadcrumb-item.active {
         color: #1E293B;
         font-weight: 500;
-    }
-
-    .breadcrumb-item + .breadcrumb-item::before {
-        content: "›";
-        color: #94A3B8;
-        padding: 0 8px;
     }
 
     .breadcrumb a {
@@ -40,6 +48,7 @@
     .breadcrumb a:hover {
         color: #4338CA;
     }
+
 
     .section-container {
         background: white;
