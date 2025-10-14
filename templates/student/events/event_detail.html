@@ -1,5 +1,5 @@
 {% extends 'student_base.html' %}
-
+{% load filters %}
 {% block title %}{{ event.title }} - Events{% endblock %}
 
 {% block page_title %}Event Details{% endblock %}
@@ -59,7 +59,7 @@
         border: 1px solid #f0f0f0;
     }
 
-    .sidebar {
+    .eventsidebar {
         background: white;
         border-radius: 8px;
         padding: 20px;
@@ -252,20 +252,20 @@
         margin-right: 12px;
     }
 
-    /* Sidebar Styles */
-    .sidebar-section {
+    /* eventsidebar Styles */
+    .eventsidebar-section {
         margin-bottom: 24px;
         padding-bottom: 24px;
         border-bottom: 1px solid #F1F5F9;
     }
 
-    .sidebar-section:last-child {
+    .eventsidebar-section:last-child {
         border-bottom: none;
         margin-bottom: 0;
         padding-bottom: 0;
     }
 
-    .sidebar-title {
+    .eventsidebar-title {
         font-size: 14px;
         font-weight: 700;
         color: #1E293B;
@@ -385,7 +385,7 @@
         opacity: 0.6;
     }
 
-    .event-meta-sidebar {
+    .event-meta-eventsidebar {
         background: #F8FAFC;
         padding: 12px;
         border-radius: 6px;
@@ -397,7 +397,7 @@
         margin-bottom: 8px;
     }
 
-    .event-meta-sidebar i {
+    .event-meta-eventsidebar i {
         color: #4F46E5;
         min-width: 18px;
     }
@@ -425,7 +425,7 @@
             grid-template-columns: 1fr;
         }
 
-        .sidebar {
+        .eventsidebar {
             position: static;
         }
 
@@ -635,10 +635,10 @@
         {% endif %}
     </div>
 
-    <!-- Sidebar -->
-    <div class="sidebar">
+    <!-- eventsidebar -->
+    <div class="eventsidebar">
         <!-- Status Section -->
-        <div class="sidebar-section">
+        <div class="eventsidebar-section">
             {% if can_view %}
                 {% if is_registered %}
                 <div class="status-badge status-registered">
@@ -664,8 +664,8 @@
 
         <!-- Capacity Section -->
         {% if event.max_attendees %}
-        <div class="sidebar-section">
-            <div class="sidebar-title">Capacity</div>
+        <div class="eventsidebar-section">
+            <div class="eventsidebar-title">Capacity</div>
             <div class="capacity-status">
                 <div class="capacity-label">Available Spaces</div>
                 <div class="capacity-bar">
@@ -686,9 +686,9 @@
             </div>
         </div>
         {% else %}
-        <div class="sidebar-section">
-            <div class="sidebar-title">Registration</div>
-            <div class="event-meta-sidebar">
+        <div class="eventsidebar-section">
+            <div class="eventsidebar-title">Registration</div>
+            <div class="event-meta-eventsidebar">
                 <i class="bi bi-people"></i>
                 <span>{{ attendee_count }} Registered<br><span style="font-size: 12px;">(No Limit)</span></span>
             </div>
@@ -696,18 +696,18 @@
         {% endif %}
 
         <!-- Quick Info -->
-        <div class="sidebar-section">
-            <div class="sidebar-title">Quick Info</div>
-            <div class="event-meta-sidebar">
+        <div class="eventsidebar-section">
+            <div class="eventsidebar-title">Quick Info</div>
+            <div class="event-meta-eventsidebar">
                 <i class="bi bi-calendar3"></i>
                 <span>{{ event.event_date|date:"d M Y" }}</span>
             </div>
-            <div class="event-meta-sidebar">
+            <div class="event-meta-eventsidebar">
                 <i class="bi bi-clock"></i>
                 <span>{{ event.start_time|time:"H:i" }} - {{ event.end_time|time:"H:i" }}</span>
             </div>
             {% if event.venue %}
-            <div class="event-meta-sidebar">
+            <div class="event-meta-eventsidebar">
                 <i class="bi bi-geo-alt"></i>
                 <span>{{ event.venue.code }}</span>
             </div>
@@ -715,7 +715,7 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="sidebar-section" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
+        <div class="eventsidebar-section" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
             {% if can_view %}
                 {% if is_registered %}
                 <form method="post" action="{% url 'unregister_from_event' event.id %}" style="margin-bottom: 12px;">

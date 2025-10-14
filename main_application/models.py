@@ -624,6 +624,7 @@ class Event(models.Model):
     max_attendees = models.IntegerField(null=True, blank=True)
     poster = models.ImageField(upload_to='events/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_published = models.BooleanField(default=True)
     
     class Meta:
         db_table = 'events'
