@@ -1,0 +1,717 @@
+{% extends 'student_base.html' %}
+
+{% block title %}Semester Reporting - Faculty Management System{% endblock %}
+
+{% block page_title %}Semester Reporting{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .alert-success {
+        background: #D1FAE5;
+        color: #065F46;
+        border: 1px solid #A7F3D0;
+    }
+
+    .alert-error {
+        background: #FEE2E2;
+        color: #991B1B;
+        border: 1px solid #FECACA;
+    }
+
+    .alert-warning {
+        background: #FEF3C7;
+        color: #92400E;
+        border: 1px solid #FDE68A;
+    }
+
+    .alert-info {
+        background: #DBEAFE;
+        color: #1E40AF;
+        border: 1px solid #BFDBFE;
+    }
+
+    .hero-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 5px;
+        padding: 40px;
+        color: white;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+
+    .hero-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+        opacity: 0.9;
+    }
+
+    .hero-title {
+        font-size: 28px;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+
+    .hero-subtitle {
+        font-size: 16px;
+        opacity: 0.9;
+    }
+
+    .status-card {
+        background: white;
+        border: 2px solid #E2E8F0;
+        border-radius: 5px;
+        padding: 30px;
+        margin-bottom: 30px;
+    }
+
+    .status-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #F1F5F9;
+    }
+
+    .status-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .status-badge {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-badge.open {
+        background: #D1FAE5;
+        color: #065F46;
+    }
+
+    .status-badge.closed {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+
+    .status-badge.holiday {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+
+    .status-badge.registered {
+        background: #DBEAFE;
+        color: #1E40AF;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 25px;
+    }
+
+    .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .info-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        font-size: 16px;
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .holiday-card {
+        background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+        border: 2px solid #FCD34D;
+        border-radius: 5px;
+        padding: 40px;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .holiday-icon {
+        font-size: 72px;
+        color: #92400E;
+        margin-bottom: 15px;
+    }
+
+    .holiday-title {
+        font-size: 24px;
+        font-weight: 600;
+        color: #78350F;
+        margin-bottom: 10px;
+    }
+
+    .holiday-message {
+        font-size: 15px;
+        color: #92400E;
+        line-height: 1.6;
+        margin-bottom: 10px;
+    }
+
+    .action-card {
+        background: #F8FAFC;
+        border: 2px dashed #CBD5E1;
+        border-radius: 5px;
+        padding: 30px;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .action-icon {
+        font-size: 48px;
+        color: #4F46E5;
+        margin-bottom: 15px;
+    }
+
+    .action-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 10px;
+    }
+
+    .action-text {
+        font-size: 14px;
+        color: #64748B;
+        margin-bottom: 20px;
+        line-height: 1.6;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+
+    .btn-secondary {
+        background: #F1F5F9;
+        color: #64748B;
+    }
+
+    .btn-secondary:hover {
+        background: #E2E8F0;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+
+    .history-section {
+        margin-top: 40px;
+    }
+
+    .section-header {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    .history-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .history-table thead {
+        background: #F8FAFC;
+    }
+
+    .history-table th {
+        padding: 12px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    .history-table td {
+        padding: 12px;
+        font-size: 14px;
+        color: #1E293B;
+        border-bottom: 1px solid #F1F5F9;
+    }
+
+    .history-table tbody tr:hover {
+        background: #F8FAFC;
+    }
+
+    .registration-status {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .registration-status.REGISTERED {
+        background: #D1FAE5;
+        color: #065F46;
+    }
+
+    .registration-status.DEFERRED {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+
+    .registration-status.WITHDRAWN {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #94A3B8;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+    }
+
+    .deadline-warning {
+        background: #FEF3C7;
+        border: 1px solid #FDE68A;
+        border-radius: 5px;
+        padding: 15px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .deadline-warning-icon {
+        font-size: 24px;
+        color: #D97706;
+        flex-shrink: 0;
+    }
+
+    .deadline-warning-text {
+        color: #92400E;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.5;
+    }
+
+    .info-section {
+        color: #64748B;
+        line-height: 1.8;
+        font-size: 14px;
+    }
+
+    .info-section p {
+        margin-bottom: 15px;
+    }
+
+    .info-section strong {
+        color: #1E293B;
+        font-weight: 600;
+    }
+
+    .info-section ul {
+        margin: 10px 0 20px 20px;
+        padding-left: 0;
+    }
+
+    .info-section ul li {
+        margin-bottom: 8px;
+    }
+
+    @media (max-width: 768px) {
+        .hero-card {
+            padding: 30px 20px;
+        }
+
+        .hero-title {
+            font-size: 24px;
+        }
+
+        .hero-subtitle {
+            font-size: 14px;
+        }
+
+        .status-header {
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .history-table {
+            font-size: 12px;
+        }
+
+        .history-table th,
+        .history-table td {
+            padding: 8px;
+        }
+
+        .holiday-card {
+            padding: 30px 20px;
+        }
+
+        .holiday-title {
+            font-size: 20px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'student_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Semester Reporting</li>
+    </ol>
+</nav>
+
+<!-- Messages -->
+{% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">
+        <i class="bi bi-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% elif message.tags == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+        <div>{{ message }}</div>
+    </div>
+    {% endfor %}
+{% endif %}
+
+<!-- Hero Section -->
+<div class="hero-card">
+    <div class="hero-icon">
+        <i class="bi bi-calendar-check"></i>
+    </div>
+    <h1 class="hero-title">Semester Reporting</h1>
+    <p class="hero-subtitle">Report for the current academic semester to continue your studies</p>
+</div>
+
+{% if not current_semester %}
+    <!-- No Active Semester -->
+    <div class="section-container">
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            <div>
+                <strong>No Active Semester:</strong> There is currently no active semester. Please check back later or contact the administration.
+            </div>
+        </div>
+    </div>
+{% elif is_on_holiday %}
+    <!-- Holiday Period -->
+    <div class="holiday-card">
+        <div class="holiday-icon">
+            <i class="bi bi-brightness-high"></i>
+        </div>
+        <h2 class="holiday-title">Currently on Holiday</h2>
+        <p class="holiday-message">
+            {{ holiday_message }}
+        </p>
+        <p class="holiday-message" style="margin-top: 15px; margin-bottom: 0;">
+            <i class="bi bi-calendar3"></i> Enjoy your break! The next semester will begin soon.
+        </p>
+    </div>
+
+    <!-- Current Semester Info -->
+    <div class="section-container">
+        <h3 class="section-header"><i class="bi bi-info-circle"></i> Current Period Information</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Academic Year</span>
+                <span class="info-value">{{ current_academic_year.year_code }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Current Period</span>
+                <span class="info-value">Semester {{ current_semester.semester_number }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Your Programme</span>
+                <span class="info-value">{{ student.programme.name }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Semesters Per Year</span>
+                <span class="info-value">{{ student.programme.semesters_per_year }} Semesters</span>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <!-- Active Semester - Can Report -->
+    <div class="section-container">
+        <div class="status-card">
+            <div class="status-header">
+                <h2 class="status-title">Current Semester Status</h2>
+                {% if already_registered %}
+                <span class="status-badge registered">
+                    <i class="bi bi-check-circle"></i> Registered
+                </span>
+                {% elif registration_open %}
+                <span class="status-badge open">
+                    <i class="bi bi-door-open"></i> Open
+                </span>
+                {% else %}
+                <span class="status-badge closed">
+                    <i class="bi bi-door-closed"></i> Closed
+                </span>
+                {% endif %}
+            </div>
+
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Academic Year</span>
+                    <span class="info-value">{{ current_academic_year.year_code }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Semester</span>
+                    <span class="info-value">Semester {{ current_semester.semester_number }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Period</span>
+                    <span class="info-value">{{ current_semester.start_date|date:"d M Y" }} - {{ current_semester.end_date|date:"d M Y" }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Registration Deadline</span>
+                    <span class="info-value">{{ current_semester.registration_deadline|date:"d M Y" }}</span>
+                </div>
+            </div>
+
+            {% if registration_open and not already_registered %}
+                <!-- Deadline Warning if close -->
+                <div class="deadline-warning">
+                    <i class="bi bi-clock-history deadline-warning-icon"></i>
+                    <div class="deadline-warning-text">
+                        <strong>Important:</strong> Registration closes on {{ current_semester.registration_deadline|date:"d M Y" }}. Please report as soon as possible.
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if already_registered %}
+                <!-- Already Registered -->
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle"></i>
+                    <div>
+                        <strong>Registration Complete!</strong><br>
+                        You have successfully reported for {{ current_semester }}.<br>
+                        Registered on: {{ registration.registration_date|date:"d M Y, H:i" }}
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="{% url 'student_dashboard' %}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+
+            {% elif registration_open %}
+                <!-- Can Report -->
+                <div class="action-card">
+                    <div class="action-icon">
+                        <i class="bi bi-file-earmark-check"></i>
+                    </div>
+                    <h3 class="action-title">Report for {{ current_semester }}</h3>
+                    <p class="action-text">
+                        Click the button below to officially report for this semester. This is required before you can enroll in units and access course materials.
+                    </p>
+
+                    <form method="post" onsubmit="return confirm('Are you sure you want to report for {{ current_semester }}?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="report_semester">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Report for Semester
+                        </button>
+                    </form>
+                </div>
+
+            {% elif deadline_passed %}
+                <!-- Deadline Passed -->
+                <div class="alert alert-error">
+                    <i class="bi bi-exclamation-circle"></i>
+                    <div>
+                        <strong>Registration Closed!</strong><br>
+                        The registration deadline for {{ current_semester }} has passed ({{ current_semester.registration_deadline|date:"d M Y" }}).<br>
+                        Please contact the Dean's office for late registration procedures.
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="{% url 'student_dashboard' %}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+
+<!-- Registration History -->
+{% if previous_registrations %}
+<div class="section-container">
+    <div class="history-section">
+        <h3 class="section-header"><i class="bi bi-clock-history"></i> Registration History</h3>
+        
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Academic Year</th>
+                    <th>Semester</th>
+                    <th>Registration Date</th>
+                    <th>Units Enrolled</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reg in previous_registrations %}
+                <tr>
+                    <td>{{ reg.semester.academic_year.year_code }}</td>
+                    <td>Semester {{ reg.semester.semester_number }}</td>
+                    <td>{{ reg.registration_date|date:"d M Y, H:i" }}</td>
+                    <td>{{ reg.units_enrolled }} unit{{ reg.units_enrolled|pluralize }}</td>
+                    <td>
+                        <span class="registration-status {{ reg.status }}">
+                            {{ reg.get_status_display }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Additional Information -->
+<div class="section-container">
+    <h3 class="section-header"><i class="bi bi-lightbulb"></i> Important Information</h3>
+    
+    <div class="info-section">
+        <p><strong>What happens after reporting?</strong></p>
+        <ul>
+            <li>You will be able to enroll in units for the semester</li>
+            <li>You can access course materials and learning resources</li>
+            <li>Your attendance will be tracked starting from your report date</li>
+            <li>You will receive notifications about classes and assessments</li>
+        </ul>
+
+        <p><strong>Need Help?</strong></p>
+        <p>If you have any questions or issues with semester reporting, please contact:</p>
+        <ul>
+            <li><i class="bi bi-building"></i> Dean's Office: {{ student.programme.department.name }}</li>
+            <li><i class="bi bi-envelope"></i> Email: dean@university.ac.ke</li>
+            <li><i class="bi bi-telephone"></i> Phone: +254 700 000 000</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    console.log('Semester reporting page loaded');
+    
+    // Auto-hide success messages after 5 seconds
+    setTimeout(() => {
+        const successAlerts = document.querySelectorAll('.alert-success');
+        successAlerts.forEach(alert => {
+            alert.style.transition = 'opacity 0.5s ease';
+            alert.style.opacity = '0';
+            setTimeout(() => alert.remove(), 500);
+        });
+    }, 5000);
+</script>
+{% endblock %}

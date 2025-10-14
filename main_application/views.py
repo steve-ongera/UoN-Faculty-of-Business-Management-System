@@ -1199,3 +1199,118 @@ def student_profile_view(request):
     }
     
     return render(request, 'student/profile.html', context)
+
+
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.utils import timezone
+from django.db import transaction
+from .models import Student, Semester, SemesterRegistration, AcademicYear
+
+@login_required
+def student_semester_reporting(request):
+    """
+    View for students to report for the current semester
+    """
+    # Ensure user is a student
+    if request.user.user_type != 'STUDENT':
+        messages.error(request, "Access denied. This page is only for students.")
+        return redirect('student_dashboard')
+    
+    try:
+        student = request.user.student_profile
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect('student_dashboard')
+    
+    # Get current semester
+    try:
+        current_semester = Semester.objects.get(is_current=True)
+        current_academic_year = current_semester.academic_year
+    except Semester.DoesNotExist:
+        current_semester = None
+        current_academic_year = None
+    
+    # Check if student's programme allows reporting
+    can_report = False
+    is_on_holiday = False
+    holiday_message = None
+    
+    if current_semester and student.programme.semesters_per_year == 2:
+        # Programme has 2 semesters per year
+        if current_semester.semester_number in [1, 2]:
+            can_report = True
+        elif current_semester.semester_number == 3:
+            is_on_holiday = True
+            holiday_message = f"Your programme ({student.programme.name}) has 2 semesters per academic year. Semester 3 is a holiday period for your programme."
+    elif current_semester and student.programme.semesters_per_year == 3:
+        # Programme has 3 semesters per year - can always report
+        can_report = True
+    
+    # Check if already registered for current semester
+    already_registered = False
+    registration = None
+    if current_semester:
+        registration = SemesterRegistration.objects.filter(
+            student=student,
+            semester=current_semester
+        ).first()
+        
+        if registration:
+            already_registered = True
+    
+    # Check registration deadline
+    registration_open = False
+    deadline_passed = False
+    if current_semester and can_report:
+        today = timezone.now().date()
+        if today <= current_semester.registration_deadline:
+            registration_open = True
+        else:
+            deadline_passed = True
+    
+    # Handle form submission
+    if request.method == 'POST' and can_report and registration_open and not already_registered:
+        action = request.POST.get('action')
+        
+        if action == 'report_semester':
+            try:
+                with transaction.atomic():
+                    # Create semester registration
+                    registration = SemesterRegistration.objects.create(
+                        student=student,
+                        semester=current_semester,
+                        status='REGISTERED',
+                        units_enrolled=0  # Will be updated during unit enrollment
+                    )
+                    
+                    messages.success(
+                        request, 
+                        f"Successfully reported for {current_semester}! You can now proceed to enroll in units."
+                    )
+                    return redirect('student_semester_reporting')
+                    
+            except Exception as e:
+                messages.error(request, f"Error reporting for semester: {str(e)}")
+    
+    # Get previous registrations
+    previous_registrations = SemesterRegistration.objects.filter(
+        student=student
+    ).select_related('semester', 'semester__academic_year').order_by('-registration_date')[:5]
+    
+    context = {
+        'student': student,
+        'current_semester': current_semester,
+        'current_academic_year': current_academic_year,
+        'can_report': can_report,
+        'is_on_holiday': is_on_holiday,
+        'holiday_message': holiday_message,
+        'already_registered': already_registered,
+        'registration': registration,
+        'registration_open': registration_open,
+        'deadline_passed': deadline_passed,
+        'previous_registrations': previous_registrations,
+    }
+    
+    return render(request, 'student/semester_reporting.html', context)
