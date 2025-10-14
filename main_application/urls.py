@@ -15,4 +15,10 @@ urlpatterns = [
     path('student_announcements_list/', views.student_announcements_list, name='student_announcements_list'),
     path('student_announcement_detail/announcement/<int:pk>/', views.student_announcement_detail, name='student_announcement_detail'),
 
+    # Events URLs
+    path('events/', views.student_events_list, name='student_events_list'),
+    path('events/<int:event_id>/', views.student_event_detail, name='student_event_detail'),
+    path('events/<int:event_id>/register/', views.register_for_event, name='register_for_event'),
+    path('events/<int:event_id>/unregister/', views.unregister_from_event, name='unregister_from_event'),
+
 ]
