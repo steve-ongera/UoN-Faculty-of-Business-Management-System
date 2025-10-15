@@ -3724,3 +3724,501 @@ def lecturer_export(request):
         ])
     
     return response
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
+from django.http import JsonResponse, HttpResponse
+from django.db.models import Count, Q
+from django.views.decorators.http import require_http_methods
+import csv
+from datetime import datetime
+from .models import (
+    Programme, Department, ProgrammeUnit, Unit, Student, 
+    UnitAllocation, Semester
+)
+
+
+# ========================
+# HELPER FUNCTIONS
+# ========================
+
+def is_admin(user):
+    """Check if user is ICT Admin, Dean, or COD"""
+    return user.user_type in ['ICT_ADMIN', 'DEAN', 'COD']
+
+
+# ========================
+# PROGRAMME LIST VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def programme_list(request):
+    """List all programmes with filters"""
+    
+    # Get filter parameters
+    department_id = request.GET.get('department', '')
+    level = request.GET.get('level', '')
+    status = request.GET.get('status', '')
+    search = request.GET.get('search', '')
+    
+    # Get programmes with related data
+    programmes = Programme.objects.select_related(
+        'department'
+    ).annotate(
+        student_count=Count('students', filter=Q(students__is_active=True)),
+        unit_count=Count('programme_units', distinct=True)
+    ).all()
+    
+    # Apply filters
+    if department_id:
+        programmes = programmes.filter(department_id=department_id)
+    
+    if level:
+        programmes = programmes.filter(level=level)
+    
+    if status == 'active':
+        programmes = programmes.filter(is_active=True)
+    elif status == 'inactive':
+        programmes = programmes.filter(is_active=False)
+    
+    if search:
+        programmes = programmes.filter(
+            Q(name__icontains=search) |
+            Q(code__icontains=search) |
+            Q(description__icontains=search)
+        )
+    
+    # Get departments for filter
+    departments = Department.objects.all().order_by('name')
+    
+    # Programme levels for filter
+    programme_levels = Programme.PROGRAMME_LEVELS
+    
+    context = {
+        'programmes': programmes,
+        'departments': departments,
+        'programme_levels': programme_levels,
+        'selected_department': department_id,
+        'selected_level': level,
+        'selected_status': status,
+        'search_query': search,
+        'total_programmes': programmes.count(),
+    }
+    
+    return render(request, 'admin/programme_list.html', context)
+
+
+# ========================
+# PROGRAMME DETAIL VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def programme_detail(request, programme_code):
+    """View detailed programme information with units organized by year and semester"""
+    
+    programme = get_object_or_404(
+        Programme.objects.select_related('department'),
+        code=programme_code
+    )
+    
+    # Get all available units in the department
+    available_units = Unit.objects.filter(
+        department=programme.department
+    ).order_by('code')
+    
+    # Organize programme units by year and semester
+    programme_structure = {}
+    
+    for year in range(1, programme.duration_years + 1):
+        programme_structure[year] = {}
+        
+        for sem in range(1, programme.semesters_per_year + 1):
+            # Get units for this year and semester
+            units = ProgrammeUnit.objects.filter(
+                programme=programme,
+                year_level=year,
+                semester=sem
+            ).select_related('unit').order_by('unit__code')
+            
+            programme_structure[year][sem] = {
+                'units': units,
+                'total_units': units.count(),
+                'core_units': units.filter(is_mandatory=True).count(),
+                'elective_units': units.filter(is_mandatory=False).count(),
+                'total_credits': sum(u.unit.credit_hours for u in units)
+            }
+    
+    # Calculate statistics
+    total_students = Student.objects.filter(
+        programme=programme,
+        is_active=True
+    ).count()
+    
+    total_units = ProgrammeUnit.objects.filter(programme=programme).count()
+    
+    total_credits = sum(
+        pu.unit.credit_hours 
+        for pu in ProgrammeUnit.objects.filter(programme=programme).select_related('unit')
+    )
+    
+    # Get year levels for the programme
+    year_levels = list(range(1, programme.duration_years + 1))
+    semester_numbers = list(range(1, programme.semesters_per_year + 1))
+    
+    context = {
+        'programme': programme,
+        'programme_structure': programme_structure,
+        'available_units': available_units,
+        'year_levels': year_levels,
+        'semester_numbers': semester_numbers,
+        'total_students': total_students,
+        'total_units': total_units,
+        'total_credits': total_credits,
+    }
+    
+    return render(request, 'admin/programme_detail.html', context)
+
+
+# ========================
+# ADD UNIT TO PROGRAMME (AJAX)
+# ========================
+@login_required
+@user_passes_test(is_admin)
+@require_http_methods(["POST"])
+def programme_add_unit(request, programme_code):
+    """Add a unit to a programme (AJAX)"""
+    
+    try:
+        programme = get_object_or_404(Programme, code=programme_code)
+        
+        unit_id = request.POST.get('unit_id')
+        year_level = request.POST.get('year_level')
+        semester = request.POST.get('semester')
+        is_mandatory = request.POST.get('is_mandatory') == 'true'
+        
+        # Validate inputs
+        if not all([unit_id, year_level, semester]):
+            return JsonResponse({
+                'success': False,
+                'message': 'Missing required fields'
+            }, status=400)
+        
+        unit = get_object_or_404(Unit, id=unit_id)
+        
+        # Check if unit already exists in this programme/year/semester
+        existing = ProgrammeUnit.objects.filter(
+            programme=programme,
+            unit=unit,
+            year_level=year_level,
+            semester=semester
+        ).exists()
+        
+        if existing:
+            return JsonResponse({
+                'success': False,
+                'message': 'This unit is already assigned to this year and semester'
+            }, status=400)
+        
+        # Create programme unit
+        programme_unit = ProgrammeUnit.objects.create(
+            programme=programme,
+            unit=unit,
+            year_level=year_level,
+            semester=semester,
+            is_mandatory=is_mandatory
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Unit {unit.code} added successfully',
+            'data': {
+                'id': programme_unit.id,
+                'unit_code': unit.code,
+                'unit_name': unit.name,
+                'credit_hours': unit.credit_hours,
+                'is_mandatory': is_mandatory,
+                'year_level': year_level,
+                'semester': semester
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }, status=500)
+
+
+# ========================
+# UPDATE PROGRAMME UNIT (AJAX)
+# ========================
+@login_required
+@user_passes_test(is_admin)
+@require_http_methods(["POST"])
+def programme_update_unit(request, programme_unit_id):
+    """Update a programme unit (AJAX)"""
+    
+    try:
+        programme_unit = get_object_or_404(ProgrammeUnit, id=programme_unit_id)
+        
+        is_mandatory = request.POST.get('is_mandatory') == 'true'
+        
+        # Update
+        programme_unit.is_mandatory = is_mandatory
+        programme_unit.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Unit updated successfully',
+            'data': {
+                'id': programme_unit.id,
+                'is_mandatory': is_mandatory
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }, status=500)
+
+
+# ========================
+# DELETE PROGRAMME UNIT (AJAX)
+# ========================
+@login_required
+@user_passes_test(is_admin)
+@require_http_methods(["POST"])
+def programme_delete_unit(request, programme_unit_id):
+    """Delete a programme unit (AJAX)"""
+    
+    try:
+        programme_unit = get_object_or_404(ProgrammeUnit, id=programme_unit_id)
+        
+        # Check if there are students enrolled in this unit
+        from .models import UnitEnrollment
+        enrollments = UnitEnrollment.objects.filter(
+            unit=programme_unit.unit,
+            student__programme=programme_unit.programme
+        ).count()
+        
+        if enrollments > 0:
+            return JsonResponse({
+                'success': False,
+                'message': f'Cannot delete. {enrollments} student(s) are enrolled in this unit.'
+            }, status=400)
+        
+        # Store data before deletion
+        unit_code = programme_unit.unit.code
+        unit_name = programme_unit.unit.name
+        
+        # Delete
+        programme_unit.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Unit {unit_code} removed from programme successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }, status=500)
+
+
+# ========================
+# CREATE PROGRAMME VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def programme_create(request):
+    """Create a new programme"""
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            name = request.POST.get('name')
+            code = request.POST.get('code')
+            level = request.POST.get('level')
+            department_id = request.POST.get('department')
+            duration_years = request.POST.get('duration_years')
+            semesters_per_year = request.POST.get('semesters_per_year')
+            description = request.POST.get('description', '')
+            
+            # Validation
+            if Programme.objects.filter(code=code).exists():
+                messages.error(request, 'Programme code already exists!')
+                return redirect('programme_create')
+            
+            # Create programme
+            programme = Programme.objects.create(
+                name=name,
+                code=code,
+                level=level,
+                department_id=department_id,
+                duration_years=duration_years,
+                semesters_per_year=semesters_per_year,
+                description=description,
+                is_active=True
+            )
+            
+            messages.success(request, f'Programme {code} created successfully!')
+            return redirect('programme_detail', programme_code=code)
+            
+        except Exception as e:
+            messages.error(request, f'Error creating programme: {str(e)}')
+            return redirect('programme_create')
+    
+    # GET request - show form
+    departments = Department.objects.all().order_by('name')
+    programme_levels = Programme.PROGRAMME_LEVELS
+    duration_years = Programme.DURATION_YEARS
+    semesters_per_year = Programme.SEMESTERS_PER_YEAR
+    
+    context = {
+        'departments': departments,
+        'programme_levels': programme_levels,
+        'duration_years': duration_years,
+        'semesters_per_year': semesters_per_year,
+    }
+    
+    return render(request, 'admin/programme_create.html', context)
+
+
+# ========================
+# UPDATE PROGRAMME VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def programme_update(request, programme_code):
+    """Update programme information"""
+    
+    programme = get_object_or_404(Programme, code=programme_code)
+    
+    if request.method == 'POST':
+        try:
+            # Update programme data
+            programme.name = request.POST.get('name')
+            programme.level = request.POST.get('level')
+            programme.department_id = request.POST.get('department')
+            programme.duration_years = request.POST.get('duration_years')
+            programme.semesters_per_year = request.POST.get('semesters_per_year')
+            programme.description = request.POST.get('description', '')
+            programme.is_active = request.POST.get('is_active') == 'on'
+            
+            programme.save()
+            
+            messages.success(request, f'Programme {programme_code} updated successfully!')
+            return redirect('programme_detail', programme_code=programme_code)
+            
+        except Exception as e:
+            messages.error(request, f'Error updating programme: {str(e)}')
+    
+    # GET request - show form
+    departments = Department.objects.all().order_by('name')
+    programme_levels = Programme.PROGRAMME_LEVELS
+    duration_years = Programme.DURATION_YEARS
+    semesters_per_year = Programme.SEMESTERS_PER_YEAR
+    
+    context = {
+        'programme': programme,
+        'departments': departments,
+        'programme_levels': programme_levels,
+        'duration_years': duration_years,
+        'semesters_per_year': semesters_per_year,
+    }
+    
+    return render(request, 'admin/programme_update.html', context)
+
+
+# ========================
+# DELETE PROGRAMME VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def programme_delete(request, programme_code):
+    """Delete a programme (soft delete - deactivate)"""
+    
+    programme = get_object_or_404(Programme, code=programme_code)
+    
+    if request.method == 'POST':
+        try:
+            # Soft delete - deactivate instead of deleting
+            programme.is_active = False
+            programme.save()
+            
+            messages.success(request, f'Programme {programme_code} has been deactivated!')
+            return redirect('programme_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error deactivating programme: {str(e)}')
+            return redirect('programme_detail', programme_code=programme_code)
+    
+    # Get counts for warning
+    active_students = Student.objects.filter(
+        programme=programme,
+        is_active=True
+    ).count()
+    
+    total_units = ProgrammeUnit.objects.filter(programme=programme).count()
+    
+    context = {
+        'programme': programme,
+        'active_students': active_students,
+        'total_units': total_units,
+    }
+    
+    return render(request, 'admin/programme_delete.html', context)
+
+
+# ========================
+# EXPORT PROGRAMME STRUCTURE
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def programme_export_structure(request, programme_code):
+    """Export programme structure to CSV"""
+    
+    programme = get_object_or_404(Programme, code=programme_code)
+    
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    filename = f'{programme.code}_structure_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    writer = csv.writer(response)
+    
+    # Write headers
+    writer.writerow([
+        'Programme',
+        'Year Level',
+        'Semester',
+        'Unit Code',
+        'Unit Name',
+        'Credit Hours',
+        'Type',
+        'Department'
+    ])
+    
+    # Write data
+    programme_units = ProgrammeUnit.objects.filter(
+        programme=programme
+    ).select_related('unit', 'unit__department').order_by(
+        'year_level', 'semester', 'unit__code'
+    )
+    
+    for pu in programme_units:
+        writer.writerow([
+            programme.code,
+            f'Year {pu.year_level}',
+            f'Semester {pu.semester}',
+            pu.unit.code,
+            pu.unit.name,
+            pu.unit.credit_hours,
+            'Core' if pu.is_mandatory else 'Elective',
+            pu.unit.department.code
+        ])
+    
+    return response
