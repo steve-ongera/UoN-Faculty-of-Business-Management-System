@@ -64,4 +64,18 @@ urlpatterns = [
     path('admin-lecturers/<str:staff_number>/update/', views.lecturer_update, name='lecturer_update'),
     path('admin-lecturers/<str:staff_number>/delete/', views.lecturer_delete, name='lecturer_delete'),
     path('admin-lecturers/export/csv/', views.lecturer_export, name='lecturer_export'),
+
+    # Programme Management
+    path('programmes/', views.programme_list, name='programme_list'),
+    path('programme/create/', views.programme_create, name='programme_create'),
+    path('programme/<str:programme_code>/', views.programme_detail, name='programme_detail'),
+    path('programme/<str:programme_code>/update/', views.programme_update, name='programme_update'),
+    path('programme/<str:programme_code>/delete/', views.programme_delete, name='programme_delete'),
+    path('programme/<str:programme_code>/export/', views.programme_export_structure, name='programme_export_structure'),
+
+    # AJAX Endpoints
+    path('programme/<str:programme_code>/add-unit/', views.programme_add_unit, name='programme_add_unit'),
+    path('programme/unit/<int:programme_unit_id>/update/', views.programme_update_unit, name='programme_update_unit'),
+    path('programme/unit/<int:programme_unit_id>/delete/', views.programme_delete_unit, name='programme_delete_unit'),
+    
 ]

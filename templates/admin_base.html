@@ -570,13 +570,13 @@
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'unit_allocations' %}active{% endif %}">Unit Allocations</a>
             </div>
 
-            <div class="menu-item has-submenu {% if 'programmes' in request.resolver_match.url_name or 'departments' in request.resolver_match.url_name %}active{% endif %}" data-submenu="programmes">
+            <div class="menu-item has-submenu {% if 'programme' in request.resolver_match.url_name or 'departments' in request.resolver_match.url_name %}active{% endif %}" data-submenu="programmes">
                 <i class="fas fa-book"></i>
                 <span>Programmes</span>
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-programmes">
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'all_programmes' %}active{% endif %}">All Programmes</a>
+                <a href="{% url 'programme_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'programme_list' %}active{% endif %}">All Programmes</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'programme_units' %}active{% endif %}">Programme Units</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'departments' %}active{% endif %}">Departments</a>
             </div>
