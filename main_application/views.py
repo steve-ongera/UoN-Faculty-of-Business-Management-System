@@ -2061,3 +2061,404 @@ def delete_conversation(request, user_id):
         print(f"Error in delete_conversation: {str(e)}")
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Avg, Count, Q, F
+from decimal import Decimal
+from collections import defaultdict
+
+@login_required
+def student_grades_view(request):
+    """View for displaying student grades organized by year and semester"""
+    
+    # Get student profile
+    try:
+        student = request.user.student_profile
+    except:
+        return render(request, 'error.html', {'message': 'Student profile not found'})
+    
+    # Get all enrollments with final grades
+    enrollments = UnitEnrollment.objects.filter(
+        student=student,
+        status='COMPLETED'
+    ).select_related(
+        'unit',
+        'semester',
+        'semester__academic_year',
+        'final_grade'
+    ).prefetch_related(
+        'marks__assessment_component'
+    ).order_by(
+        'semester__academic_year__start_date',
+        'semester__semester_number'
+    )
+    
+    # Organize grades by year and semester
+    grades_by_year = defaultdict(lambda: {
+        'year_label': '',
+        'semesters': defaultdict(lambda: {
+            'semester_label': '',
+            'academic_year': '',
+            'units': [],
+            'total_units': 0,
+            'total_credits': 0,
+            'semester_gpa': Decimal('0.00'),
+            'graded_units': 0
+        })
+    })
+    
+    total_credits_earned = 0
+    total_grade_points = Decimal('0.00')
+    total_units_completed = 0
+    
+    for enrollment in enrollments:
+        semester = enrollment.semester
+        academic_year = semester.academic_year
+        
+        # Determine year level from program unit
+        try:
+            program_unit = ProgrammeUnit.objects.get(
+                programme=student.programme,
+                unit=enrollment.unit
+            )
+            year_level = program_unit.year_level
+        except:
+            # Fallback to student's enrollment year
+            year_level = student.current_year
+        
+        semester_num = semester.semester_number
+        
+        # Get assessment breakdown
+        assessment_breakdown = []
+        total_marks = Decimal('0.00')
+        
+        marks = enrollment.marks.all().select_related('assessment_component')
+        for mark in marks:
+            component = mark.assessment_component
+            # Calculate weighted marks
+            weighted_marks = (mark.marks_obtained / component.max_marks) * component.weight_percentage
+            total_marks += weighted_marks
+            
+            assessment_breakdown.append({
+                'name': component.name,
+                'type': component.get_component_type_display(),
+                'weight': component.weight_percentage,
+                'max_marks': component.max_marks,
+                'marks_obtained': mark.marks_obtained,
+                'weighted_marks': weighted_marks,
+                'percentage': (mark.marks_obtained / component.max_marks) * 100 if component.max_marks > 0 else 0
+            })
+        
+        # Get final grade
+        unit_data = {
+            'unit_code': enrollment.unit.code,
+            'unit_name': enrollment.unit.name,
+            'credit_hours': enrollment.unit.credit_hours,
+            'assessment_breakdown': assessment_breakdown,
+            'total_marks': total_marks,
+            'grade': None,
+            'grade_point': None,
+            'has_grade': False
+        }
+        
+        if hasattr(enrollment, 'final_grade'):
+            final_grade = enrollment.final_grade
+            unit_data.update({
+                'grade': final_grade.grade,
+                'grade_point': final_grade.grade_point,
+                'total_marks': final_grade.total_marks,
+                'has_grade': True
+            })
+            
+            # Calculate totals for GPA
+            if final_grade.grade_point > 0:
+                total_credits_earned += enrollment.unit.credit_hours
+                total_grade_points += (final_grade.grade_point * enrollment.unit.credit_hours)
+                total_units_completed += 1
+        
+        # Add to structure
+        year_data = grades_by_year[year_level]
+        year_data['year_label'] = f'Year {year_level}'
+        
+        semester_data = year_data['semesters'][semester_num]
+        semester_data['semester_label'] = f'Semester {semester_num}'
+        semester_data['academic_year'] = academic_year.year_code
+        semester_data['units'].append(unit_data)
+        semester_data['total_units'] += 1
+        semester_data['total_credits'] += enrollment.unit.credit_hours
+        
+        if unit_data['has_grade']:
+            semester_data['graded_units'] += 1
+    
+    # Calculate semester GPAs
+    for year_level, year_data in grades_by_year.items():
+        for semester_num, semester_data in year_data['semesters'].items():
+            semester_credits = Decimal('0.00')
+            semester_points = Decimal('0.00')
+            
+            for unit in semester_data['units']:
+                if unit['has_grade'] and unit['grade_point']:
+                    semester_credits += unit['credit_hours']
+                    semester_points += (unit['grade_point'] * unit['credit_hours'])
+            
+            if semester_credits > 0:
+                semester_data['semester_gpa'] = round(semester_points / semester_credits, 2)
+    
+    # Calculate cumulative GPA
+    cumulative_gpa = Decimal('0.00')
+    if total_credits_earned > 0:
+        cumulative_gpa = round(total_grade_points / total_credits_earned, 2)
+    
+    # Sort the data
+    grades_by_year = dict(sorted(grades_by_year.items()))
+    for year_level in grades_by_year:
+        grades_by_year[year_level]['semesters'] = dict(
+            sorted(grades_by_year[year_level]['semesters'].items())
+        )
+    
+    context = {
+        'student': student,
+        'programme': student.programme,
+        'grades_by_year': grades_by_year,
+        'cumulative_gpa': cumulative_gpa,
+        'total_credits_earned': total_credits_earned,
+        'total_units_completed': total_units_completed,
+        'current_year': student.current_year,
+    }
+    
+    return render(request, 'student/my_grades.html', context)
+
+
+@login_required
+def academic_performance_view(request):
+    """View for displaying overall academic performance with classification"""
+    
+    # Get student profile
+    try:
+        student = request.user.student_profile
+    except:
+        return render(request, 'error.html', {'message': 'Student profile not found'})
+    
+    # Get all completed enrollments with grades
+    enrollments = UnitEnrollment.objects.filter(
+        student=student,
+        status='COMPLETED',
+        final_grade__isnull=False
+    ).select_related(
+        'unit',
+        'semester',
+        'semester__academic_year',
+        'final_grade'
+    ).order_by(
+        'semester__academic_year__start_date',
+        'semester__semester_number'
+    )
+    
+    # Calculate overall statistics
+    total_credits_earned = 0
+    total_grade_points = Decimal('0.00')
+    total_units = 0
+    grade_distribution = defaultdict(int)
+    
+    # Performance by year
+    performance_by_year = defaultdict(lambda: {
+        'year_label': '',
+        'semesters': [],
+        'total_credits': 0,
+        'total_grade_points': Decimal('0.00'),
+        'year_gpa': Decimal('0.00'),
+        'units_count': 0
+    })
+    
+    # Performance by semester
+    semester_performance = []
+    
+    current_semester_data = {}
+    
+    for enrollment in enrollments:
+        final_grade = enrollment.final_grade
+        semester = enrollment.semester
+        
+        # Get year level
+        try:
+            program_unit = ProgrammeUnit.objects.get(
+                programme=student.programme,
+                unit=enrollment.unit
+            )
+            year_level = program_unit.year_level
+        except:
+            year_level = student.current_year
+        
+        credits = enrollment.unit.credit_hours
+        grade_point = final_grade.grade_point
+        
+        # Overall totals
+        total_credits_earned += credits
+        total_grade_points += (grade_point * credits)
+        total_units += 1
+        grade_distribution[final_grade.grade] += 1
+        
+        # Year performance
+        year_data = performance_by_year[year_level]
+        year_data['year_label'] = f'Year {year_level}'
+        year_data['total_credits'] += credits
+        year_data['total_grade_points'] += (grade_point * credits)
+        year_data['units_count'] += 1
+        
+        # Semester data
+        semester_key = f"{semester.academic_year.year_code}-{semester.semester_number}"
+        if semester_key not in current_semester_data:
+            current_semester_data[semester_key] = {
+                'semester': semester,
+                'academic_year': semester.academic_year.year_code,
+                'semester_number': semester.semester_number,
+                'semester_label': f'Semester {semester.semester_number}',
+                'year_level': year_level,
+                'credits': 0,
+                'grade_points': Decimal('0.00'),
+                'gpa': Decimal('0.00'),
+                'units_count': 0,
+                'grades': []
+            }
+        
+        sem_data = current_semester_data[semester_key]
+        sem_data['credits'] += credits
+        sem_data['grade_points'] += (grade_point * credits)
+        sem_data['units_count'] += 1
+        sem_data['grades'].append({
+            'unit_code': enrollment.unit.code,
+            'unit_name': enrollment.unit.name,
+            'grade': final_grade.grade,
+            'grade_point': grade_point,
+            'credits': credits
+        })
+    
+    # Calculate GPAs
+    cumulative_gpa = Decimal('0.00')
+    if total_credits_earned > 0:
+        cumulative_gpa = round(total_grade_points / total_credits_earned, 2)
+    
+    # Calculate year GPAs
+    for year_level, year_data in performance_by_year.items():
+        if year_data['total_credits'] > 0:
+            year_data['year_gpa'] = round(
+                year_data['total_grade_points'] / year_data['total_credits'],
+                2
+            )
+    
+    # Calculate semester GPAs
+    for sem_data in current_semester_data.values():
+        if sem_data['credits'] > 0:
+            sem_data['gpa'] = round(sem_data['grade_points'] / sem_data['credits'], 2)
+        semester_performance.append(sem_data)
+    
+    # Sort semester performance by date
+    semester_performance.sort(
+        key=lambda x: (x['semester'].academic_year.start_date, x['semester_number'])
+    )
+    
+    # Group semesters by year for display
+    for sem_data in semester_performance:
+        year_level = sem_data['year_level']
+        performance_by_year[year_level]['semesters'].append(sem_data)
+    
+    # Determine degree classification
+    classification = get_degree_classification(cumulative_gpa, student.programme.level)
+    
+    # Calculate progression metrics
+    credits_required = student.programme.duration_years * 30  # Assuming 30 credits per year
+    progress_percentage = (total_credits_earned / credits_required * 100) if credits_required > 0 else 0
+    
+    # Grade distribution for chart
+    grade_dist_list = [
+        {'grade': grade, 'count': count}
+        for grade, count in sorted(grade_distribution.items())
+    ]
+    
+    # Sort performance by year
+    performance_by_year = dict(sorted(performance_by_year.items()))
+    
+    context = {
+        'student': student,
+        'programme': student.programme,
+        'cumulative_gpa': cumulative_gpa,
+        'classification': classification,
+        'total_credits_earned': total_credits_earned,
+        'total_units': total_units,
+        'credits_required': credits_required,
+        'progress_percentage': round(progress_percentage, 1),
+        'performance_by_year': performance_by_year,
+        'semester_performance': semester_performance,
+        'grade_distribution': grade_dist_list,
+        'highest_gpa_semester': max(semester_performance, key=lambda x: x['gpa']) if semester_performance else None,
+        'lowest_gpa_semester': min(semester_performance, key=lambda x: x['gpa']) if semester_performance else None,
+    }
+    
+    return render(request, 'student/academic_performance.html', context)
+
+
+def get_degree_classification(gpa, programme_level):
+    """Determine degree classification based on GPA and programme level"""
+    
+    # Only classify for Bachelor's degree
+    if programme_level != 'BACHELORS':
+        if gpa >= 3.5:
+            return {
+                'class': 'Distinction',
+                'color': '#16A34A',
+                'description': 'Outstanding Performance'
+            }
+        elif gpa >= 3.0:
+            return {
+                'class': 'Credit',
+                'color': '#2563EB',
+                'description': 'Very Good Performance'
+            }
+        elif gpa >= 2.0:
+            return {
+                'class': 'Pass',
+                'color': '#F59E0B',
+                'description': 'Good Performance'
+            }
+        else:
+            return {
+                'class': 'Below Pass',
+                'color': '#DC2626',
+                'description': 'Needs Improvement'
+            }
+    
+    # Bachelor's degree classification
+    if gpa >= 3.60:
+        return {
+            'class': 'First Class Honours',
+            'color': '#16A34A',
+            'description': 'Exceptional Academic Achievement'
+        }
+    elif gpa >= 3.00:
+        return {
+            'class': 'Second Class Honours (Upper Division)',
+            'color': '#2563EB',
+            'description': 'Very Good Academic Performance'
+        }
+    elif gpa >= 2.50:
+        return {
+            'class': 'Second Class Honours (Lower Division)',
+            'color': '#7C3AED',
+            'description': 'Good Academic Performance'
+        }
+    elif gpa >= 2.00:
+        return {
+            'class': 'Pass',
+            'color': '#F59E0B',
+            'description': 'Satisfactory Performance'
+        }
+    else:
+        return {
+            'class': 'Fail',
+            'color': '#DC2626',
+            'description': 'Below Minimum Requirement'
+        }
