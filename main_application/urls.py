@@ -38,4 +38,8 @@ urlpatterns = [
     path('api/messages/unread-count/', views.get_unread_count, name='get_unread_count'),
     path('api/messages/delete/<int:user_id>/', views.delete_conversation, name='delete_conversation'),
 
+    path('student_grades_view/', views.student_grades_view, name='student_grades_view'),
+    path('academic_performance_view/', views.academic_performance_view, name='academic_performance_view'),
+
+
 ]

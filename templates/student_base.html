@@ -581,12 +581,12 @@
         <div class="menu-section">
             <div class="menu-title">Assessment</div>
             
-            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'student_grades' %}active{% endif %}">
+            <a href="{% url 'student_grades_view'%}" class="menu-item {% if request.resolver_match.url_name == 'student_grades' %}active{% endif %}">
                 <i class="fas fa-star"></i>
                 <span>My Grades</span>
             </a>
 
-            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'academic_performance' %}active{% endif %}">
+            <a href="{% url 'academic_performance_view'%}" class="menu-item {% if request.resolver_match.url_name == 'academic_performance' %}active{% endif %}">
                 <i class="fas fa-chart-line"></i>
                 <span>Academic Performance</span>
             </a>
