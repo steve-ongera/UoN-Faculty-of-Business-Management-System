@@ -57,5 +57,11 @@ urlpatterns = [
     path('admin-students/<str:registration_number>/delete/', views.student_delete, name='student_delete'),
     path('admin-students/export/csv/', views.student_export, name='student_export'),
 
-
+    # Lecturer Management URLs
+    path('admin-lecturers/', views.lecturer_list, name='lecturer_list'),
+    path('admin-lecturers/create/', views.lecturer_create, name='lecturer_create'),
+    path('admin-lecturers/<str:staff_number>/', views.lecturer_detail, name='lecturer_detail'),
+    path('admin-lecturers/<str:staff_number>/update/', views.lecturer_update, name='lecturer_update'),
+    path('admin-lecturers/<str:staff_number>/delete/', views.lecturer_delete, name='lecturer_delete'),
+    path('admin-lecturers/export/csv/', views.lecturer_export, name='lecturer_export'),
 ]
