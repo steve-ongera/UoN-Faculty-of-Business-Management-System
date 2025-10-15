@@ -1,0 +1,591 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Update Student - {{ student.registration_number }}{% endblock %}
+
+{% block page_title %}Update Student{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .form-section {
+        margin-bottom: 30px;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #F1F5F9;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .form-group.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .form-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: #475569;
+    }
+
+    .form-label .required {
+        color: #EF4444;
+    }
+
+    .form-input,
+    .form-select,
+    .form-textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        font-size: 14px;
+        background: white;
+        transition: all 0.3s ease;
+    }
+
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .form-textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    .form-help {
+        font-size: 12px;
+        color: #94A3B8;
+    }
+
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .form-check input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+
+    .btn-group {
+        display: flex;
+        gap: 15px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid #F1F5F9;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+        transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+        background: #64748B;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #475569;
+    }
+
+    .alert {
+        padding: 15px 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .alert-error {
+        background: #FEE2E2;
+        color: #991B1B;
+        border: 1px solid #FECACA;
+    }
+
+    .alert-success {
+        background: #D1FAE5;
+        color: #065F46;
+        border: 1px solid #A7F3D0;
+    }
+
+    .alert-warning {
+        background: #FEF3C7;
+        color: #92400E;
+        border: 1px solid #FDE68A;
+    }
+
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .btn-group {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'student_list' %}">Students</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'student_detail' student.registration_number %}">{{ student.registration_number }}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Update</li>
+    </ol>
+</nav>
+
+<!-- Messages -->
+{% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{% if message.tags == 'error' %}error{% else %}{{ message.tags }}{% endif %}">
+        <i class="bi bi-{% if message.tags == 'error' %}exclamation-circle{% elif message.tags == 'warning' %}exclamation-triangle{% else %}check-circle{% endif %}"></i>
+        {{ message }}
+    </div>
+    {% endfor %}
+{% endif %}
+
+<div class="section-container">
+    <form method="post" action="{% url 'student_update' student.registration_number %}">
+        {% csrf_token %}
+
+        <!-- User Account Information -->
+        <div class="form-section">
+            <h3 class="section-title">
+                <i class="bi bi-person-lock"></i>
+                User Account Information
+            </h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="username">
+                        Username <span class="required">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        class="form-input" 
+                        required
+                        value="{{ student.user.username }}"
+                    >
+                    <span class="form-help">Used for system login</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="email">
+                        Email <span class="required">*</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email" 
+                        class="form-input" 
+                        required
+                        value="{{ student.user.email }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="new_password">
+                        New Password
+                    </label>
+                    <input 
+                        type="password" 
+                        id="new_password" 
+                        name="new_password" 
+                        class="form-input" 
+                        placeholder="Leave blank to keep current password"
+                    >
+                    <span class="form-help">Only fill if you want to change the password</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="phone_number">
+                        Phone Number
+                    </label>
+                    <input 
+                        type="text" 
+                        id="phone_number" 
+                        name="phone_number" 
+                        class="form-input" 
+                        value="{{ student.user.phone_number|default:'' }}"
+                    >
+                </div>
+            </div>
+        </div>
+
+        <!-- Personal Information -->
+        <div class="form-section">
+            <h3 class="section-title">
+                <i class="bi bi-person"></i>
+                Personal Information
+            </h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="first_name">
+                        First Name <span class="required">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="first_name" 
+                        name="first_name" 
+                        class="form-input" 
+                        required
+                        value="{{ student.first_name }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="last_name">
+                        Last Name <span class="required">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="last_name" 
+                        name="last_name" 
+                        class="form-input" 
+                        required
+                        value="{{ student.last_name }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="surname">
+                        Surname
+                    </label>
+                    <input 
+                        type="text" 
+                        id="surname" 
+                        name="surname" 
+                        class="form-input" 
+                        value="{{ student.surname|default:'' }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="date_of_birth">
+                        Date of Birth
+                    </label>
+                    <input 
+                        type="date" 
+                        id="date_of_birth" 
+                        name="date_of_birth" 
+                        class="form-input"
+                        value="{% if student.date_of_birth %}{{ student.date_of_birth|date:'Y-m-d' }}{% endif %}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="phone">
+                        Student Phone
+                    </label>
+                    <input 
+                        type="text" 
+                        id="phone" 
+                        name="phone" 
+                        class="form-input" 
+                        value="{{ student.phone|default:'' }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="student_email">
+                        Student Email
+                    </label>
+                    <input 
+                        type="email" 
+                        id="student_email" 
+                        name="student_email" 
+                        class="form-input" 
+                        value="{{ student.email|default:'' }}"
+                    >
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label" for="address">
+                        Address
+                    </label>
+                    <textarea 
+                        id="address" 
+                        name="address" 
+                        class="form-textarea"
+                    >{{ student.address|default:'' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Academic Information -->
+        <div class="form-section">
+            <h3 class="section-title">
+                <i class="bi bi-mortarboard"></i>
+                Academic Information
+            </h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="registration_number">
+                        Registration Number
+                    </label>
+                    <input 
+                        type="text" 
+                        id="registration_number" 
+                        class="form-input" 
+                        value="{{ student.registration_number }}"
+                        disabled
+                    >
+                    <span class="form-help">Registration number cannot be changed</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="programme">
+                        Programme <span class="required">*</span>
+                    </label>
+                    <select id="programme" name="programme" class="form-select" required>
+                        <option value="">Select Programme</option>
+                        {% for prog in programmes %}
+                        <option value="{{ prog.id }}" {% if prog.id == student.programme.id %}selected{% endif %}>
+                            {{ prog.code }} - {{ prog.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="current_year">
+                        Current Year <span class="required">*</span>
+                    </label>
+                    <select id="current_year" name="current_year" class="form-select" required>
+                        <option value="">Select Year</option>
+                        {% for value, label in year_levels %}
+                        <option value="{{ value }}" {% if value == student.current_year %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="intake">
+                        Intake <span class="required">*</span>
+                    </label>
+                    <select id="intake" name="intake" class="form-select" required>
+                        <option value="">Select Intake</option>
+                        {% for intake in intakes %}
+                        <option value="{{ intake.id }}" {% if intake.id == student.intake.id %}selected{% endif %}>
+                            {{ intake.name }} - {{ intake.academic_year.year_code }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="admission_date">
+                        Admission Date <span class="required">*</span>
+                    </label>
+                    <input 
+                        type="date" 
+                        id="admission_date" 
+                        name="admission_date" 
+                        class="form-input" 
+                        required
+                        value="{{ student.admission_date|date:'Y-m-d' }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Account Status
+                    </label>
+                    <div class="form-check">
+                        <input 
+                            type="checkbox" 
+                            id="is_active" 
+                            name="is_active"
+                            {% if student.is_active %}checked{% endif %}
+                        >
+                        <label for="is_active">Active</label>
+                    </div>
+                    <span class="form-help">Uncheck to deactivate student account</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Parent/Guardian Information -->
+        <div class="form-section">
+            <h3 class="section-title">
+                <i class="bi bi-people"></i>
+                Parent/Guardian Information
+            </h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label" for="parent_name">
+                        Parent Name
+                    </label>
+                    <input 
+                        type="text" 
+                        id="parent_name" 
+                        name="parent_name" 
+                        class="form-input" 
+                        value="{{ student.parent_name|default:'' }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="parent_phone">
+                        Parent Phone
+                    </label>
+                    <input 
+                        type="text" 
+                        id="parent_phone" 
+                        name="parent_phone" 
+                        class="form-input" 
+                        value="{{ student.parent_phone|default:'' }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="guardian_name">
+                        Guardian Name
+                    </label>
+                    <input 
+                        type="text" 
+                        id="guardian_name" 
+                        name="guardian_name" 
+                        class="form-input" 
+                        value="{{ student.guardian_name|default:'' }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="guardian_phone">
+                        Guardian Phone
+                    </label>
+                    <input 
+                        type="text" 
+                        id="guardian_phone" 
+                        name="guardian_phone" 
+                        class="form-input" 
+                        value="{{ student.guardian_phone|default:'' }}"
+                    >
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="btn-group">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle"></i>
+                Update Student
+            </button>
+            <a href="{% url 'student_detail' student.registration_number %}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i>
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    console.log('Student update form loaded');
+    
+    // Form validation
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const newPassword = document.getElementById('new_password').value;
+        if (newPassword && newPassword.length < 8) {
+            e.preventDefault();
+            alert('Password must be at least 8 characters long');
+        }
+    });
+</script>
+{% endblock %}

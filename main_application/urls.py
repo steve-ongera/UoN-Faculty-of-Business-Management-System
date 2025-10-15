@@ -11,7 +11,7 @@ urlpatterns = [
     path('dashboard/lecturer/', views.lecturer_dashboard, name='lecturer_dashboard'),
     path('dashboard/cod/', views.cod_dashboard, name='cod_dashboard'),
     path('dashboard/dean/', views.dean_dashboard, name='dean_dashboard'),
-    path('dashboard/admin/', views.admin_dashboard, name='admin_dashboard'),
+    path('dashboard/admin-', views.admin_dashboard, name='admin_dashboard'),
     path('student_announcements_list/', views.student_announcements_list, name='student_announcements_list'),
     path('student_announcement_detail/announcement/<int:pk>/', views.student_announcement_detail, name='student_announcement_detail'),
 
@@ -48,6 +48,14 @@ urlpatterns = [
     path('save-marks/', views.save_marks_ajax, name='save_marks_ajax'),
     path('calculate-final-grade/', views.calculate_final_grade_ajax, name='calculate_final_grade_ajax'),
     path('bulk-entry/semester/<int:semester_id>/unit/<int:unit_id>/',views.bulk_marks_entry_view, name='bulk_marks_entry_view'),
+
+    # Student Management URLs
+    path('admin-students/', views.student_list, name='student_list'),
+    path('admin-students/create/', views.student_create, name='student_create'),
+    path('admin-students/<str:registration_number>/', views.student_detail, name='student_detail'),
+    path('admin-students/<str:registration_number>/update/', views.student_update, name='student_update'),
+    path('admin-students/<str:registration_number>/delete/', views.student_delete, name='student_delete'),
+    path('admin-students/export/csv/', views.student_export, name='student_export'),
 
 
 ]

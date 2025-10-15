@@ -534,7 +534,7 @@
 
         <div class="menu-section">
             <div class="menu-title">Main Menu</div>
-            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
+            <a href="{% url 'admin_dashboard'%}" class="menu-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
                 <i class="fas fa-home"></i>
                 <span>Dashboard</span>
             </a>
@@ -553,8 +553,8 @@
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-students">
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'all_students' %}active{% endif %}">All Students</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'add_student' %}active{% endif %}">Add New Student</a>
+                <a href="{% url 'student_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'student_list' %}active{% endif %}">All Students</a>
+                <a href="{% url 'student_create'%}" class="submenu-item {% if request.resolver_match.url_name == 'student_create' %}active{% endif %}">Add New Student</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'student_progression' %}active{% endif %}">Student Progression</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'enrollment_management' %}active{% endif %}">Enrollment Management</a>
             </div>

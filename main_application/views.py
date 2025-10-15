@@ -2873,3 +2873,457 @@ def bulk_marks_entry_view(request, semester_id, unit_id):
     }
     
     return render(request, 'admin/bulk_marks_entry.html', context)
+
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models import Q, Count
+from django.http import HttpResponse, JsonResponse
+from django.utils import timezone
+from django.contrib.auth.hashers import make_password
+import csv
+import json
+from datetime import datetime
+
+from .models import (
+    Student, User, Programme, Department, Intake, 
+    AcademicYear, UnitEnrollment, SemesterRegistration
+)
+
+# Helper function to check if user is admin
+def is_admin(user):
+    return user.is_authenticated and user.user_type in ['ICT_ADMIN', 'DEAN', 'COD']
+
+# ========================
+# STUDENT LIST VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def student_list(request):
+    """List all students with filtering and pagination"""
+    
+    # Get all students
+    students = Student.objects.select_related(
+        'user', 'programme', 'programme__department', 'intake'
+    ).all()
+    
+    # Get filter parameters
+    search_query = request.GET.get('search', '')
+    programme_filter = request.GET.get('programme', '')
+    year_filter = request.GET.get('year', '')
+    intake_filter = request.GET.get('intake', '')
+    status_filter = request.GET.get('status', '')
+    
+    # Apply filters
+    if search_query:
+        students = students.filter(
+            Q(registration_number__icontains=search_query) |
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query) |
+            Q(surname__icontains=search_query) |
+            Q(email__icontains=search_query) |
+            Q(phone__icontains=search_query)
+        )
+    
+    if programme_filter:
+        students = students.filter(programme_id=programme_filter)
+    
+    if year_filter:
+        students = students.filter(current_year=year_filter)
+    
+    if intake_filter:
+        students = students.filter(intake_id=intake_filter)
+    
+    if status_filter:
+        if status_filter == 'active':
+            students = students.filter(is_active=True)
+        elif status_filter == 'inactive':
+            students = students.filter(is_active=False)
+    
+    # Get statistics
+    total_students = students.count()
+    active_students = students.filter(is_active=True).count()
+    inactive_students = students.filter(is_active=False).count()
+    
+    # Statistics by year
+    year_stats = students.values('current_year').annotate(count=Count('user')).order_by('current_year')
+    
+    # Pagination
+    paginator = Paginator(students, 20)  # 20 students per page
+    page = request.GET.get('page', 1)
+    
+    try:
+        students_page = paginator.page(page)
+    except PageNotAnInteger:
+        students_page = paginator.page(1)
+    except EmptyPage:
+        students_page = paginator.page(paginator.num_pages)
+    
+    # Get filter options
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    intakes = Intake.objects.filter(is_active=True).order_by('-intake_date')[:10]
+    year_levels = Student.YEAR_LEVELS
+    
+    context = {
+        'students': students_page,
+        'page_obj': students_page,
+        'total_students': total_students,
+        'active_students': active_students,
+        'inactive_students': inactive_students,
+        'year_stats': year_stats,
+        'programmes': programmes,
+        'intakes': intakes,
+        'year_levels': year_levels,
+        'search_query': search_query,
+        'programme_filter': programme_filter,
+        'year_filter': year_filter,
+        'intake_filter': intake_filter,
+        'status_filter': status_filter,
+    }
+    
+    return render(request, 'admin/student_list.html', context)
+
+
+# ========================
+# STUDENT DETAIL VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def student_detail(request, registration_number):
+    """View detailed information about a student"""
+    
+    student = get_object_or_404(
+        Student.objects.select_related(
+            'user', 'programme', 'programme__department', 'intake'
+        ),
+        registration_number=registration_number
+    )
+    
+    # Get enrollment history
+    enrollments = UnitEnrollment.objects.filter(
+        student=student
+    ).select_related(
+        'unit', 'semester', 'semester__academic_year'
+    ).order_by('-semester__start_date')
+    
+    # Get semester registrations
+    registrations = SemesterRegistration.objects.filter(
+        student=student
+    ).select_related('semester', 'semester__academic_year').order_by('-registration_date')
+    
+    # Get progression history
+    progressions = student.progressions.select_related(
+        'from_programme', 'to_programme'
+    ).order_by('-completion_date')
+    
+    # Calculate statistics
+    total_enrollments = enrollments.count()
+    completed_units = enrollments.filter(status='COMPLETED').count()
+    failed_units = enrollments.filter(status='FAILED').count()
+    current_enrollments = enrollments.filter(status='ENROLLED').count()
+    
+    context = {
+        'student': student,
+        'enrollments': enrollments[:10],  # Last 10 enrollments
+        'registrations': registrations[:5],  # Last 5 registrations
+        'progressions': progressions,
+        'total_enrollments': total_enrollments,
+        'completed_units': completed_units,
+        'failed_units': failed_units,
+        'current_enrollments': current_enrollments,
+    }
+    
+    return render(request, 'admin/student_detail.html', context)
+
+
+# ========================
+# CREATE STUDENT VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def student_create(request):
+    """Create a new student"""
+    
+    if request.method == 'POST':
+        try:
+            # Get user data
+            username = request.POST.get('username')
+            email = request.POST.get('email')
+            password = request.POST.get('password')
+            first_name = request.POST.get('first_name')
+            last_name = request.POST.get('last_name')
+            surname = request.POST.get('surname', '')
+            phone_number = request.POST.get('phone_number', '')
+            
+            # Get student data
+            registration_number = request.POST.get('registration_number')
+            programme_id = request.POST.get('programme')
+            current_year = request.POST.get('current_year')
+            intake_id = request.POST.get('intake')
+            admission_date = request.POST.get('admission_date')
+            
+            # Additional details
+            phone = request.POST.get('phone', '')
+            student_email = request.POST.get('student_email', '')
+            date_of_birth = request.POST.get('date_of_birth', None)
+            address = request.POST.get('address', '')
+            parent_name = request.POST.get('parent_name', '')
+            parent_phone = request.POST.get('parent_phone', '')
+            guardian_name = request.POST.get('guardian_name', '')
+            guardian_phone = request.POST.get('guardian_phone', '')
+            
+            # Validation
+            if User.objects.filter(username=username).exists():
+                messages.error(request, 'Username already exists!')
+                return redirect('student_create')
+            
+            if Student.objects.filter(registration_number=registration_number).exists():
+                messages.error(request, 'Registration number already exists!')
+                return redirect('student_create')
+            
+            # Create user
+            user = User.objects.create(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                user_type='STUDENT',
+                phone_number=phone_number,
+                is_active=True
+            )
+            user.password = make_password(password)
+            user.save()
+            
+            # Create student
+            student = Student.objects.create(
+                user=user,
+                registration_number=registration_number,
+                first_name=first_name,
+                last_name=last_name,
+                surname=surname,
+                programme_id=programme_id,
+                current_year=current_year,
+                intake_id=intake_id,
+                admission_date=admission_date,
+                phone=phone,
+                email=student_email,
+                date_of_birth=date_of_birth if date_of_birth else None,
+                address=address,
+                parent_name=parent_name,
+                parent_phone=parent_phone,
+                guardian_name=guardian_name,
+                guardian_phone=guardian_phone,
+                is_active=True
+            )
+            
+            messages.success(request, f'Student {registration_number} created successfully!')
+            return redirect('student_detail', registration_number=registration_number)
+            
+        except Exception as e:
+            messages.error(request, f'Error creating student: {str(e)}')
+            return redirect('student_create')
+    
+    # GET request - show form
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    intakes = Intake.objects.filter(is_active=True).order_by('-intake_date')
+    year_levels = Student.YEAR_LEVELS
+    
+    context = {
+        'programmes': programmes,
+        'intakes': intakes,
+        'year_levels': year_levels,
+    }
+    
+    return render(request, 'admin/student_create.html', context)
+
+
+# ========================
+# UPDATE STUDENT VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def student_update(request, registration_number):
+    """Update student information"""
+    
+    student = get_object_or_404(Student, registration_number=registration_number)
+    user = student.user
+    
+    if request.method == 'POST':
+        try:
+            # Update user data
+            user.username = request.POST.get('username')
+            user.email = request.POST.get('email')
+            user.first_name = request.POST.get('first_name')
+            user.last_name = request.POST.get('last_name')
+            user.phone_number = request.POST.get('phone_number', '')
+            
+            # Update password if provided
+            new_password = request.POST.get('new_password')
+            if new_password:
+                user.password = make_password(new_password)
+            
+            user.save()
+            
+            # Update student data
+            student.first_name = request.POST.get('first_name')
+            student.last_name = request.POST.get('last_name')
+            student.surname = request.POST.get('surname', '')
+            student.programme_id = request.POST.get('programme')
+            student.current_year = request.POST.get('current_year')
+            student.intake_id = request.POST.get('intake')
+            student.admission_date = request.POST.get('admission_date')
+            student.phone = request.POST.get('phone', '')
+            student.email = request.POST.get('student_email', '')
+            
+            date_of_birth = request.POST.get('date_of_birth')
+            student.date_of_birth = date_of_birth if date_of_birth else None
+            
+            student.address = request.POST.get('address', '')
+            student.parent_name = request.POST.get('parent_name', '')
+            student.parent_phone = request.POST.get('parent_phone', '')
+            student.guardian_name = request.POST.get('guardian_name', '')
+            student.guardian_phone = request.POST.get('guardian_phone', '')
+            student.is_active = request.POST.get('is_active') == 'on'
+            
+            student.save()
+            
+            messages.success(request, f'Student {registration_number} updated successfully!')
+            return redirect('student_detail', registration_number=registration_number)
+            
+        except Exception as e:
+            messages.error(request, f'Error updating student: {str(e)}')
+    
+    # GET request - show form
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    intakes = Intake.objects.filter(is_active=True).order_by('-intake_date')
+    year_levels = Student.YEAR_LEVELS
+    
+    context = {
+        'student': student,
+        'programmes': programmes,
+        'intakes': intakes,
+        'year_levels': year_levels,
+    }
+    
+    return render(request, 'admin/student_update.html', context)
+
+
+# ========================
+# DELETE STUDENT VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def student_delete(request, registration_number):
+    """Delete a student (soft delete - deactivate)"""
+    
+    student = get_object_or_404(Student, registration_number=registration_number)
+    
+    if request.method == 'POST':
+        try:
+            # Soft delete - deactivate instead of deleting
+            student.is_active = False
+            student.user.is_active = False
+            student.save()
+            student.user.save()
+            
+            messages.success(request, f'Student {registration_number} has been deactivated!')
+            return redirect('student_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error deactivating student: {str(e)}')
+            return redirect('student_detail', registration_number=registration_number)
+    
+    context = {
+        'student': student,
+    }
+    
+    return render(request, 'admin/student_delete.html', context)
+
+
+# ========================
+# EXPORT STUDENTS VIEW
+# ========================
+@login_required
+@user_passes_test(is_admin)
+def student_export(request):
+    """Export students to CSV based on filters"""
+    
+    # Get filter parameters
+    programme_id = request.GET.get('programme', '')
+    year = request.GET.get('year', '')
+    intake_id = request.GET.get('intake', '')
+    status = request.GET.get('status', '')
+    
+    # Get students
+    students = Student.objects.select_related(
+        'user', 'programme', 'intake'
+    ).all()
+    
+    # Apply filters
+    if programme_id:
+        students = students.filter(programme_id=programme_id)
+    
+    if year:
+        students = students.filter(current_year=year)
+    
+    if intake_id:
+        students = students.filter(intake_id=intake_id)
+    
+    if status == 'active':
+        students = students.filter(is_active=True)
+    elif status == 'inactive':
+        students = students.filter(is_active=False)
+    
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    filename = f'students_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    writer = csv.writer(response)
+    
+    # Write headers
+    writer.writerow([
+        'Registration Number',
+        'First Name',
+        'Last Name',
+        'Surname',
+        'Email',
+        'Phone',
+        'Programme',
+        'Current Year',
+        'Intake',
+        'Admission Date',
+        'Status',
+        'Date of Birth',
+        'Address',
+        'Parent Name',
+        'Parent Phone',
+        'Guardian Name',
+        'Guardian Phone'
+    ])
+    
+    # Write data
+    for student in students:
+        writer.writerow([
+            student.registration_number,
+            student.first_name,
+            student.last_name,
+            student.surname,
+            student.email or '',
+            student.phone or '',
+            student.programme.name,
+            student.get_current_year_display(),
+            student.intake.name,
+            student.admission_date.strftime('%Y-%m-%d'),
+            'Active' if student.is_active else 'Inactive',
+            student.date_of_birth.strftime('%Y-%m-%d') if student.date_of_birth else '',
+            student.address or '',
+            student.parent_name or '',
+            student.parent_phone or '',
+            student.guardian_name or '',
+            student.guardian_phone or ''
+        ])
+    
+    return response
