@@ -42,4 +42,12 @@ urlpatterns = [
     path('academic_performance_view/', views.academic_performance_view, name='academic_performance_view'),
 
 
+    path('marks-entry/', views.marks_entry_view, name='marks_entry_view'),
+    path('search-student/', views.search_student_ajax, name='search_student_ajax'),
+    path('student/<int:student_id>/semester/<int:semester_id>/', views.student_units_view, name='student_units_view'),
+    path('save-marks/', views.save_marks_ajax, name='save_marks_ajax'),
+    path('calculate-final-grade/', views.calculate_final_grade_ajax, name='calculate_final_grade_ajax'),
+    path('bulk-entry/semester/<int:semester_id>/unit/<int:unit_id>/',views.bulk_marks_entry_view, name='bulk_marks_entry_view'),
+
+
 ]

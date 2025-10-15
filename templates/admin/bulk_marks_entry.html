@@ -1,0 +1,930 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Bulk Marks Entry - {{ unit.code }} - Faculty Management System{% endblock %}
+
+{% block page_title %}Bulk Marks Entry{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 25px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 25px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .unit-header {
+        background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 5px;
+        margin-bottom: 25px;
+    }
+
+    .unit-header h2 {
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0 0 15px 0;
+    }
+
+    .unit-details {
+        display: flex;
+        gap: 25px;
+        flex-wrap: wrap;
+        font-size: 14px;
+    }
+
+    .detail-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .toolbar {
+        background: #F8FAFC;
+        padding: 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .toolbar-left {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .toolbar-right {
+        display: flex;
+        gap: 10px;
+    }
+
+    .student-count {
+        font-size: 14px;
+        color: #64748B;
+    }
+
+    .student-count strong {
+        color: #1E293B;
+        font-weight: 600;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+        transform: translateY(-1px);
+    }
+
+    .btn-success {
+        background: #10B981;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #059669;
+    }
+
+    .btn-export {
+        background: #F1F5F9;
+        color: #64748B;
+    }
+
+    .btn-export:hover {
+        background: #E2E8F0;
+    }
+
+    .marks-table-container {
+        overflow-x: auto;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+    }
+
+    .marks-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 800px;
+    }
+
+    .marks-table thead {
+        background: #F8FAFC;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .marks-table th {
+        padding: 12px;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 600;
+        color: #64748B;
+        border-bottom: 2px solid #E2E8F0;
+        white-space: nowrap;
+    }
+
+    .marks-table th.fixed-col {
+        position: sticky;
+        left: 0;
+        background: #F8FAFC;
+        z-index: 11;
+        border-right: 2px solid #E2E8F0;
+    }
+
+    .marks-table td {
+        padding: 12px;
+        border-bottom: 1px solid #F1F5F9;
+        font-size: 14px;
+    }
+
+    .marks-table td.fixed-col {
+        position: sticky;
+        left: 0;
+        background: white;
+        z-index: 9;
+        border-right: 2px solid #E2E8F0;
+        font-weight: 500;
+    }
+
+    .marks-table tbody tr:hover td {
+        background: #F8FAFC;
+    }
+
+    .marks-table tbody tr:hover td.fixed-col {
+        background: #F1F5F9;
+    }
+
+    .student-info {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .student-name {
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .student-reg {
+        font-size: 12px;
+        color: #64748B;
+    }
+
+    .marks-input-cell {
+        text-align: center;
+    }
+
+    .marks-input {
+        width: 80px;
+        padding: 6px 10px;
+        border: 1px solid #E2E8F0;
+        border-radius: 4px;
+        font-size: 13px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    .marks-input:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .marks-input.saved {
+        border-color: #10B981;
+        background: #ECFDF5;
+    }
+
+    .marks-input.error {
+        border-color: #EF4444;
+        background: #FEF2F2;
+    }
+
+    .total-cell {
+        text-align: center;
+        font-weight: 600;
+        color: #4F46E5;
+    }
+
+    .grade-cell {
+        text-align: center;
+    }
+
+    .grade-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        background: #DBEAFE;
+        color: #1E40AF;
+    }
+
+    .grade-badge.excellent {
+        background: #DCFCE7;
+        color: #166534;
+    }
+
+    .grade-badge.good {
+        background: #DBEAFE;
+        color: #1E40AF;
+    }
+
+    .grade-badge.average {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+
+    .grade-badge.poor {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+
+    .action-cell {
+        text-align: center;
+    }
+
+    .btn-calculate-single {
+        padding: 5px 12px;
+        background: #10B981;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-calculate-single:hover {
+        background: #059669;
+    }
+
+    .btn-calculate-single:disabled {
+        background: #CBD5E1;
+        cursor: not-allowed;
+    }
+
+    .component-header {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .component-name {
+        font-weight: 600;
+    }
+
+    .component-meta {
+        font-size: 11px;
+        color: #94A3B8;
+        font-weight: normal;
+    }
+
+    .alert {
+        padding: 15px 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .alert-success {
+        background: #DCFCE7;
+        border: 1px solid #86EFAC;
+        color: #166534;
+    }
+
+    .alert-error {
+        background: #FEE2E2;
+        border: 1px solid #FCA5A5;
+        color: #991B1B;
+    }
+
+    .alert-info {
+        background: #DBEAFE;
+        border: 1px solid #93C5FD;
+        color: #1E40AF;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: #CBD5E1;
+        margin-bottom: 16px;
+    }
+
+    .empty-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #64748B;
+        margin-bottom: 8px;
+    }
+
+    .save-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: white;
+        border: 2px solid #E2E8F0;
+        border-radius: 5px;
+        padding: 15px 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        display: none;
+        align-items: center;
+        gap: 10px;
+        z-index: 1000;
+    }
+
+    .save-indicator.show {
+        display: flex;
+        animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .save-indicator.success {
+        border-color: #10B981;
+        color: #166534;
+    }
+
+    .save-indicator.error {
+        border-color: #EF4444;
+        color: #991B1B;
+    }
+
+    @media (max-width: 768px) {
+        .toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .toolbar-left,
+        .toolbar-right {
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .marks-input {
+            width: 60px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'marks_entry_view' %}"><i class="bi bi-pencil-square"></i> Marks Entry</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Bulk Entry - {{ unit.code }}</li>
+    </ol>
+</nav>
+
+<!-- Unit Header -->
+<div class="unit-header">
+    <h2><i class="bi bi-book"></i> {{ unit.name }}</h2>
+    <div class="unit-details">
+        <div class="detail-item">
+            <i class="bi bi-code-square"></i>
+            <strong>Code:</strong> {{ unit.code }}
+        </div>
+        <div class="detail-item">
+            <i class="bi bi-calendar-range"></i>
+            <strong>Semester:</strong> {{ semester.academic_year.year_code }} - Semester {{ semester.semester_number }}
+        </div>
+        <div class="detail-item">
+            <i class="bi bi-bookmark-star"></i>
+            <strong>Credit Hours:</strong> {{ unit.credit_hours }}
+        </div>
+    </div>
+</div>
+
+<div class="section-container">
+    <!-- Alert Container -->
+    <div id="alertContainer"></div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <div class="student-count">
+                <i class="bi bi-people"></i>
+                Showing <strong>{{ student_data|length }}</strong> student{{ student_data|length|pluralize }}
+            </div>
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-export" onclick="exportToExcel()">
+                <i class="bi bi-file-earmark-spreadsheet"></i>
+                Export to Excel
+            </button>
+            <button class="btn btn-success" id="calculateAllBtn">
+                <i class="bi bi-calculator"></i>
+                Calculate All Grades
+            </button>
+        </div>
+    </div>
+
+    {% if student_data %}
+        <div class="marks-table-container">
+            <table class="marks-table">
+                <thead>
+                    <tr>
+                        <th class="fixed-col">Student</th>
+                        {% for component in components %}
+                        <th style="text-align: center;">
+                            <div class="component-header">
+                                <span class="component-name">{{ component.name }}</span>
+                                <span class="component-meta">
+                                    {{ component.weight_percentage }}% • Max: {{ component.max_marks }}
+                                </span>
+                            </div>
+                        </th>
+                        {% endfor %}
+                        <th style="text-align: center;">Total</th>
+                        <th style="text-align: center;">Grade</th>
+                        <th style="text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for data in student_data %}
+                    <tr data-enrollment-id="{{ data.enrollment.id }}">
+                        <td class="fixed-col">
+                            <div class="student-info">
+                                <span class="student-name">{{ data.student.first_name }} {{ data.student.last_name }}</span>
+                                <span class="student-reg">{{ data.student.registration_number }}</span>
+                            </div>
+                        </td>
+                        
+                        {% for component in components %}
+                        <td class="marks-input-cell">
+                            <input 
+                                type="number" 
+                                class="marks-input" 
+                                data-enrollment-id="{{ data.enrollment.id }}"
+                                data-component-id="{{ component.id }}"
+                                data-max-marks="{{ component.max_marks }}"
+                                value="{% if component.id in data.marks %}{{ data.marks|get_item:component.id }}{% endif %}"
+                                min="0"
+                                max="{{ component.max_marks }}"
+                                step="0.01"
+                                placeholder="0"
+                            >
+                        </td>
+                        {% endfor %}
+                        
+                        <td class="total-cell">
+                            <span class="total-marks" data-enrollment-id="{{ data.enrollment.id }}">-</span>
+                        </td>
+                        
+                        <td class="grade-cell">
+                            {% if data.final_grade %}
+                            <span class="grade-badge {% if data.final_grade.grade in 'A,A-' %}excellent{% elif data.final_grade.grade in 'B+,B,B-' %}good{% elif data.final_grade.grade in 'C+,C,C-' %}average{% else %}poor{% endif %}">
+                                {{ data.final_grade.grade }}
+                            </span>
+                            {% else %}
+                            <span style="color: #CBD5E1;">-</span>
+                            {% endif %}
+                        </td>
+                        
+                        <td class="action-cell">
+                            <button 
+                                class="btn-calculate-single" 
+                                data-enrollment-id="{{ data.enrollment.id }}"
+                                title="Calculate final grade for this student"
+                            >
+                                <i class="bi bi-calculator"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3 class="empty-title">No Students Enrolled</h3>
+            <p style="color: #94A3B8; font-size: 14px;">
+                There are no students enrolled in this unit for the selected semester.
+            </p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Save Indicator -->
+<div class="save-indicator" id="saveIndicator">
+    <i class="bi bi-check-circle-fill"></i>
+    <span id="saveMessage">Marks saved successfully</span>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const marksInputs = document.querySelectorAll('.marks-input');
+        const calculateAllBtn = document.getElementById('calculateAllBtn');
+        const alertContainer = document.getElementById('alertContainer');
+        const saveIndicator = document.getElementById('saveIndicator');
+        const saveMessage = document.getElementById('saveMessage');
+
+        // Track saving state
+        let savingQueue = new Set();
+
+        // Auto-save marks on input change
+        marksInputs.forEach(input => {
+            let saveTimeout;
+            
+            input.addEventListener('input', function() {
+                clearTimeout(saveTimeout);
+                
+                saveTimeout = setTimeout(() => {
+                    saveMarks(this);
+                }, 1000); // Wait 1 second after user stops typing
+            });
+
+            input.addEventListener('blur', function() {
+                clearTimeout(saveTimeout);
+                saveMarks(this);
+            });
+
+            // Calculate totals on load if marks exist
+            if (input.value) {
+                updateRowTotal(input.dataset.enrollmentId);
+            }
+        });
+
+        function saveMarks(input) {
+            const enrollmentId = input.dataset.enrollmentId;
+            const componentId = input.dataset.componentId;
+            const marks = input.value;
+            const maxMarks = parseFloat(input.dataset.maxMarks);
+            const saveKey = `${enrollmentId}-${componentId}`;
+
+            // Validate marks
+            if (marks !== '' && (parseFloat(marks) < 0 || parseFloat(marks) > maxMarks)) {
+                input.classList.add('error');
+                showSaveIndicator(`Invalid marks. Maximum: ${maxMarks}`, 'error');
+                return;
+            }
+
+            // Remove error class
+            input.classList.remove('error');
+
+            // Add to saving queue
+            savingQueue.add(saveKey);
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('enrollment_id', enrollmentId);
+            formData.append('component_id', componentId);
+            formData.append('marks', marks);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            // Send AJAX request
+            fetch('/admin/marks-entry/save-marks/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                savingQueue.delete(saveKey);
+
+                if (data.success) {
+                    input.classList.add('saved');
+                    
+                    // Update row total
+                    updateRowTotal(enrollmentId);
+
+                    // Show success indicator
+                    showSaveIndicator('Marks saved successfully', 'success');
+
+                    // Remove saved class after 2 seconds
+                    setTimeout(() => {
+                        input.classList.remove('saved');
+                    }, 2000);
+                } else {
+                    input.classList.add('error');
+                    showSaveIndicator(data.error || 'Failed to save marks', 'error');
+                }
+            })
+            .catch(error => {
+                savingQueue.delete(saveKey);
+                input.classList.add('error');
+                showSaveIndicator('An error occurred while saving marks', 'error');
+                console.error('Error:', error);
+            });
+        }
+
+        function updateRowTotal(enrollmentId) {
+            const inputs = document.querySelectorAll(`.marks-input[data-enrollment-id="${enrollmentId}"]`);
+            const components = {{ components|safe|default:"[]" }};
+            let total = 0;
+            let allFilled = true;
+
+            inputs.forEach((input, index) => {
+                const marks = parseFloat(input.value) || 0;
+                const maxMarks = parseFloat(input.dataset.maxMarks);
+                
+                if (input.value === '') {
+                    allFilled = false;
+                } else if (marks > 0) {
+                    // Calculate weighted score
+                    const percentage = (marks / maxMarks) * 100;
+                    // Get weight from component (you'll need to pass this in the template)
+                    const weight = parseFloat(input.closest('td').previousElementSibling?.querySelector('.component-meta')?.textContent?.match(/(\d+\.?\d*)%/)?.[1] || 0);
+                    const weightedScore = (percentage * weight) / 100;
+                    total += weightedScore;
+                }
+            });
+
+            // Update total display
+            const totalSpan = document.querySelector(`.total-marks[data-enrollment-id="${enrollmentId}"]`);
+            if (totalSpan) {
+                totalSpan.textContent = total > 0 ? total.toFixed(2) : '-';
+            }
+
+            // Enable/disable calculate button
+            const calculateBtn = document.querySelector(`.btn-calculate-single[data-enrollment-id="${enrollmentId}"]`);
+            if (calculateBtn) {
+                calculateBtn.disabled = !allFilled;
+            }
+        }
+
+        // Calculate single student grade
+        document.querySelectorAll('.btn-calculate-single').forEach(button => {
+            button.addEventListener('click', function() {
+                const enrollmentId = this.dataset.enrollmentId;
+                calculateFinalGrade(enrollmentId);
+            });
+        });
+
+        // Calculate all grades
+        if (calculateAllBtn) {
+            calculateAllBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to calculate final grades for all students? This will only calculate grades for students with complete marks.')) {
+                    calculateAllGrades();
+                }
+            });
+        }
+
+        function calculateFinalGrade(enrollmentId) {
+            const button = document.querySelector(`.btn-calculate-single[data-enrollment-id="${enrollmentId}"]`);
+            if (button) {
+                button.disabled = true;
+                button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+            }
+
+            const formData = new FormData();
+            formData.append('enrollment_id', enrollmentId);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            fetch('/admin/marks-entry/calculate-final-grade/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSaveIndicator(`Grade calculated: ${data.grade}`, 'success');
+                    
+                    // Update grade display
+                    const row = document.querySelector(`tr[data-enrollment-id="${enrollmentId}"]`);
+                    if (row) {
+                        const gradeCell = row.querySelector('.grade-cell');
+                        if (gradeCell) {
+                            const gradeClass = data.grade.startsWith('A') ? 'excellent' : 
+                                             data.grade.startsWith('B') ? 'good' : 
+                                             data.grade.startsWith('C') ? 'average' : 'poor';
+                            gradeCell.innerHTML = `<span class="grade-badge ${gradeClass}">${data.grade}</span>`;
+                        }
+                    }
+
+                    if (button) {
+                        button.innerHTML = '<i class="bi bi-check-circle-fill"></i>';
+                        setTimeout(() => {
+                            button.innerHTML = '<i class="bi bi-calculator"></i>';
+                            button.disabled = false;
+                        }, 2000);
+                    }
+                } else {
+                    showSaveIndicator(data.error || 'Failed to calculate grade', 'error');
+                    if (button) {
+                        button.innerHTML = '<i class="bi bi-calculator"></i>';
+                        button.disabled = false;
+                    }
+                }
+            })
+            .catch(error => {
+                showSaveIndicator('An error occurred', 'error');
+                console.error('Error:', error);
+                if (button) {
+                    button.innerHTML = '<i class="bi bi-calculator"></i>';
+                    button.disabled = false;
+                }
+            });
+        }
+
+        function calculateAllGrades() {
+            calculateAllBtn.disabled = true;
+            calculateAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Calculating...';
+
+            const enrollmentIds = [];
+            document.querySelectorAll('.btn-calculate-single:not(:disabled)').forEach(btn => {
+                enrollmentIds.push(btn.dataset.enrollmentId);
+            });
+
+            if (enrollmentIds.length === 0) {
+                showAlert('No students with complete marks found', 'info');
+                calculateAllBtn.disabled = false;
+                calculateAllBtn.innerHTML = '<i class="bi bi-calculator"></i> Calculate All Grades';
+                return;
+            }
+
+            let completed = 0;
+            let failed = 0;
+
+            // Process sequentially to avoid overwhelming the server
+            processNextGrade(0);
+
+            function processNextGrade(index) {
+                if (index >= enrollmentIds.length) {
+                    // All done
+                    calculateAllBtn.disabled = false;
+                    calculateAllBtn.innerHTML = '<i class="bi bi-calculator"></i> Calculate All Grades';
+                    showAlert(`Calculation complete: ${completed} succeeded, ${failed} failed`, completed > 0 ? 'success' : 'error');
+                    return;
+                }
+
+                const enrollmentId = enrollmentIds[index];
+                const formData = new FormData();
+                formData.append('enrollment_id', enrollmentId);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                fetch('/admin/marks-entry/calculate-final-grade/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        completed++;
+                        // Update grade display
+                        const row = document.querySelector(`tr[data-enrollment-id="${enrollmentId}"]`);
+                        if (row) {
+                            const gradeCell = row.querySelector('.grade-cell');
+                            if (gradeCell) {
+                                const gradeClass = data.grade.startsWith('A') ? 'excellent' : 
+                                                 data.grade.startsWith('B') ? 'good' : 
+                                                 data.grade.startsWith('C') ? 'average' : 'poor';
+                                gradeCell.innerHTML = `<span class="grade-badge ${gradeClass}">${data.grade}</span>`;
+                            }
+                        }
+                    } else {
+                        failed++;
+                    }
+                    
+                    // Update button text with progress
+                    calculateAllBtn.innerHTML = `<i class="bi bi-hourglass-split"></i> Calculating... (${index + 1}/${enrollmentIds.length})`;
+                    
+                    // Process next
+                    processNextGrade(index + 1);
+                })
+                .catch(error => {
+                    failed++;
+                    console.error('Error:', error);
+                    processNextGrade(index + 1);
+                });
+            }
+        }
+
+        function showSaveIndicator(message, type) {
+            saveMessage.textContent = message;
+            saveIndicator.className = `save-indicator show ${type}`;
+            
+            const icon = saveIndicator.querySelector('i');
+            if (type === 'success') {
+                icon.className = 'bi bi-check-circle-fill';
+            } else {
+                icon.className = 'bi bi-exclamation-circle-fill';
+            }
+
+            setTimeout(() => {
+                saveIndicator.classList.remove('show');
+            }, 3000);
+        }
+
+        function showAlert(message, type) {
+            const alertClass = type === 'success' ? 'alert-success' : 
+                              type === 'error' ? 'alert-error' : 'alert-info';
+            const icon = type === 'success' ? 'check-circle' : 
+                        type === 'error' ? 'exclamation-triangle' : 'info-circle';
+            
+            alertContainer.innerHTML = `
+                <div class="alert ${alertClass}">
+                    <i class="bi bi-${icon}"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 5000);
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Export to Excel function
+        window.exportToExcel = function() {
+            showAlert('Export functionality will be implemented with backend support', 'info');
+        };
+
+        // Initialize totals for all rows
+        const uniqueEnrollments = new Set();
+        marksInputs.forEach(input => {
+            uniqueEnrollments.add(input.dataset.enrollmentId);
+        });
+        uniqueEnrollments.forEach(enrollmentId => {
+            updateRowTotal(enrollmentId);
+        });
+    });
+</script>
+{% endblock %}

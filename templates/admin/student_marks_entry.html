@@ -1,0 +1,775 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Enter Marks - {{ student.registration_number }} - Faculty Management System{% endblock %}
+
+{% block page_title %}Enter Marks{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 25px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 25px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .student-header {
+        background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 5px;
+        margin-bottom: 25px;
+    }
+
+    .student-header h2 {
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0 0 15px 0;
+    }
+
+    .student-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        font-size: 14px;
+    }
+
+    .detail-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .detail-item strong {
+        opacity: 0.9;
+    }
+
+    .unit-card {
+        background: white;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        padding: 20px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+
+    .unit-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        border-color: #4F46E5;
+    }
+
+    .unit-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #F1F5F9;
+        margin-bottom: 20px;
+    }
+
+    .unit-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+        margin: 0 0 5px 0;
+    }
+
+    .unit-code {
+        font-size: 14px;
+        color: #64748B;
+    }
+
+    .badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-enrolled {
+        background: #DBEAFE;
+        color: #1E40AF;
+    }
+
+    .badge-completed {
+        background: #DCFCE7;
+        color: #166534;
+    }
+
+    .badge-dropped {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+
+    .assessment-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 15px;
+    }
+
+    .assessment-table th {
+        background: #F8FAFC;
+        padding: 12px;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 600;
+        color: #64748B;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    .assessment-table td {
+        padding: 12px;
+        border-bottom: 1px solid #F1F5F9;
+        font-size: 14px;
+    }
+
+    .assessment-table tr:hover {
+        background: #F8FAFC;
+    }
+
+    .marks-input {
+        width: 100px;
+        padding: 8px 12px;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+
+    .marks-input:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .marks-input.saved {
+        border-color: #10B981;
+        background: #ECFDF5;
+    }
+
+    .marks-input.error {
+        border-color: #EF4444;
+        background: #FEF2F2;
+    }
+
+    .weighted-score {
+        font-weight: 600;
+        color: #4F46E5;
+    }
+
+    .total-row {
+        background: #F8FAFC;
+        font-weight: 600;
+    }
+
+    .total-row td {
+        padding: 15px 12px;
+        font-size: 15px;
+        border-top: 2px solid #4F46E5;
+        border-bottom: 2px solid #4F46E5;
+    }
+
+    .btn-calculate {
+        background: #10B981;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-calculate:hover {
+        background: #059669;
+        transform: translateY(-1px);
+    }
+
+    .btn-calculate:disabled {
+        background: #CBD5E1;
+        cursor: not-allowed;
+    }
+
+    .final-grade-card {
+        background: #ECFDF5;
+        border: 2px solid #10B981;
+        border-radius: 5px;
+        padding: 20px;
+        margin-top: 15px;
+    }
+
+    .final-grade-card h4 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #166534;
+        margin: 0 0 15px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .grade-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+    }
+
+    .grade-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .grade-label {
+        font-size: 12px;
+        color: #64748B;
+        font-weight: 500;
+    }
+
+    .grade-value {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .alert {
+        padding: 15px 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .alert-success {
+        background: #DCFCE7;
+        border: 1px solid #86EFAC;
+        color: #166534;
+    }
+
+    .alert-error {
+        background: #FEE2E2;
+        border: 1px solid #FCA5A5;
+        color: #991B1B;
+    }
+
+    .alert-info {
+        background: #DBEAFE;
+        border: 1px solid #93C5FD;
+        color: #1E40AF;
+    }
+
+    .save-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        margin-left: 10px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .save-status.show {
+        opacity: 1;
+    }
+
+    .save-status.success {
+        color: #10B981;
+    }
+
+    .save-status.error {
+        color: #EF4444;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: #CBD5E1;
+        margin-bottom: 16px;
+    }
+
+    .empty-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #64748B;
+        margin-bottom: 8px;
+    }
+
+    @media (max-width: 768px) {
+        .student-details {
+            grid-template-columns: 1fr;
+        }
+
+        .unit-header {
+            flex-direction: column;
+            align-items: start;
+            gap: 10px;
+        }
+
+        .assessment-table {
+            font-size: 12px;
+        }
+
+        .marks-input {
+            width: 80px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'marks_entry_view' %}"><i class="bi bi-pencil-square"></i> Marks Entry</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ student.registration_number }}</li>
+    </ol>
+</nav>
+
+<!-- Student Header -->
+<div class="student-header">
+    <h2><i class="bi bi-person-circle"></i> {{ student.first_name }} {{ student.last_name }}</h2>
+    <div class="student-details">
+        <div class="detail-item">
+            <i class="bi bi-person-badge"></i>
+            <strong>Reg No:</strong> {{ student.registration_number }}
+        </div>
+        <div class="detail-item">
+            <i class="bi bi-mortarboard"></i>
+            <strong>Programme:</strong> {{ student.programme.name }}
+        </div>
+        <div class="detail-item">
+            <i class="bi bi-calendar-range"></i>
+            <strong>Semester:</strong> {{ semester.academic_year.year_code }} - Semester {{ semester.semester_number }}
+        </div>
+        <div class="detail-item">
+            <i class="bi bi-bookmark-star"></i>
+            <strong>Year:</strong> Year {{ student.current_year }}
+        </div>
+    </div>
+</div>
+
+<div class="section-container">
+    <!-- Alert Container -->
+    <div id="alertContainer"></div>
+
+    {% if enrollment_data %}
+        {% for data in enrollment_data %}
+        <div class="unit-card">
+            <div class="unit-header">
+                <div>
+                    <h3 class="unit-title">{{ data.enrollment.unit.name }}</h3>
+                    <div class="unit-code">{{ data.enrollment.unit.code }} • {{ data.enrollment.unit.credit_hours }} Credit Hours</div>
+                </div>
+                <span class="badge badge-{{ data.enrollment.status|lower }}">
+                    {{ data.enrollment.get_status_display }}
+                </span>
+            </div>
+
+            <!-- Assessment Table -->
+            <table class="assessment-table">
+                <thead>
+                    <tr>
+                        <th>Assessment Component</th>
+                        <th style="text-align: center;">Type</th>
+                        <th style="text-align: center;">Weight (%)</th>
+                        <th style="text-align: center;">Max Marks</th>
+                        <th style="text-align: center;">Marks Obtained</th>
+                        <th style="text-align: center;">Weighted Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assessment in data.assessments %}
+                    <tr>
+                        <td>{{ assessment.component.name }}</td>
+                        <td style="text-align: center;">
+                            <span style="font-size: 12px; background: #F1F5F9; padding: 4px 8px; border-radius: 3px;">
+                                {{ assessment.component.get_component_type_display }}
+                            </span>
+                        </td>
+                        <td style="text-align: center;">{{ assessment.component.weight_percentage }}%</td>
+                        <td style="text-align: center;">{{ assessment.component.max_marks }}</td>
+                        <td style="text-align: center;">
+                            <input 
+                                type="number" 
+                                class="marks-input" 
+                                data-enrollment-id="{{ data.enrollment.id }}"
+                                data-component-id="{{ assessment.component.id }}"
+                                data-max-marks="{{ assessment.component.max_marks }}"
+                                value="{% if assessment.mark %}{{ assessment.mark.marks_obtained }}{% endif %}"
+                                min="0"
+                                max="{{ assessment.component.max_marks }}"
+                                step="0.01"
+                                placeholder="Enter marks"
+                            >
+                            <span class="save-status"></span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span class="weighted-score" data-weighted-id="{{ data.enrollment.id }}-{{ assessment.component.id }}">
+                                {% if assessment.weighted_score %}{{ assessment.weighted_score }}{% else %}-{% endif %}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    
+                    <!-- Total Row -->
+                    <tr class="total-row">
+                        <td colspan="5" style="text-align: right;"><strong>Total Marks:</strong></td>
+                        <td style="text-align: center;">
+                            <span class="weighted-score" id="total-{{ data.enrollment.id }}">
+                                {{ data.total_marks }}
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Calculate Final Grade Button -->
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <button 
+                    class="btn-calculate" 
+                    data-enrollment-id="{{ data.enrollment.id }}"
+                    {% if not data.has_all_marks %}disabled{% endif %}
+                >
+                    <i class="bi bi-calculator"></i>
+                    Calculate Final Grade
+                </button>
+                
+                {% if not data.has_all_marks %}
+                <span style="color: #EF4444; font-size: 13px;">
+                    <i class="bi bi-exclamation-circle"></i> Please enter all marks before calculating final grade
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Final Grade Display -->
+            {% if data.final_grade %}
+            <div class="final-grade-card">
+                <h4>
+                    <i class="bi bi-award"></i>
+                    Final Grade
+                    {% if data.final_grade.is_approved %}
+                    <span style="color: #10B981; font-size: 12px; margin-left: 10px;">
+                        <i class="bi bi-check-circle-fill"></i> Approved
+                    </span>
+                    {% endif %}
+                </h4>
+                <div class="grade-details">
+                    <div class="grade-item">
+                        <span class="grade-label">Total Marks</span>
+                        <span class="grade-value">{{ data.final_grade.total_marks }}/100</span>
+                    </div>
+                    <div class="grade-item">
+                        <span class="grade-label">Grade</span>
+                        <span class="grade-value" style="color: #10B981;">{{ data.final_grade.grade }}</span>
+                    </div>
+                    <div class="grade-item">
+                        <span class="grade-label">Grade Point</span>
+                        <span class="grade-value">{{ data.final_grade.grade_point }}</span>
+                    </div>
+                    <div class="grade-item">
+                        <span class="grade-label">Computed On</span>
+                        <span class="grade-value" style="font-size: 14px;">{{ data.final_grade.computed_date|date:"d M Y, H:i" }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- Grading Scheme Reference -->
+        {% if grading_scheme %}
+        <div class="section-container" style="background: #F8FAFC;">
+            <h3 style="font-size: 16px; font-weight: 600; color: #1E293B; margin-bottom: 15px;">
+                <i class="bi bi-table"></i> Grading Scheme - {{ student.programme.code }}
+            </h3>
+            <table class="assessment-table">
+                <thead>
+                    <tr>
+                        <th>Grade</th>
+                        <th>Marks Range</th>
+                        <th>Grade Point</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for grade in grading_scheme %}
+                    <tr>
+                        <td><strong>{{ grade.grade }}</strong></td>
+                        <td>{{ grade.min_marks }} - {{ grade.max_marks }}</td>
+                        <td>{{ grade.grade_point }}</td>
+                        <td>{{ grade.description }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3 class="empty-title">No Units Enrolled</h3>
+            <p style="color: #94A3B8; font-size: 14px;">
+                This student has not enrolled in any units for the selected semester.
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const marksInputs = document.querySelectorAll('.marks-input');
+        const calculateButtons = document.querySelectorAll('.btn-calculate');
+        const alertContainer = document.getElementById('alertContainer');
+
+        // Auto-save marks on input change
+        marksInputs.forEach(input => {
+            let saveTimeout;
+            
+            input.addEventListener('input', function() {
+                clearTimeout(saveTimeout);
+                const statusSpan = this.nextElementSibling;
+                
+                // Show saving status
+                statusSpan.textContent = 'Saving...';
+                statusSpan.className = 'save-status show';
+                
+                saveTimeout = setTimeout(() => {
+                    saveMarks(this);
+                }, 1000); // Wait 1 second after user stops typing
+            });
+
+            input.addEventListener('blur', function() {
+                saveMarks(this);
+            });
+        });
+
+        function saveMarks(input) {
+            const enrollmentId = input.dataset.enrollmentId;
+            const componentId = input.dataset.componentId;
+            const marks = input.value;
+            const maxMarks = parseFloat(input.dataset.maxMarks);
+            const statusSpan = input.nextElementSibling;
+
+            // Validate marks
+            if (marks !== '' && (parseFloat(marks) < 0 || parseFloat(marks) > maxMarks)) {
+                input.classList.add('error');
+                statusSpan.textContent = `Max: ${maxMarks}`;
+                statusSpan.className = 'save-status show error';
+                return;
+            }
+
+            // Remove error class
+            input.classList.remove('error');
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('enrollment_id', enrollmentId);
+            formData.append('component_id', componentId);
+            formData.append('marks', marks);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            // Send AJAX request
+            fetch('/save-marks/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    input.classList.add('saved');
+                    statusSpan.innerHTML = '<i class="bi bi-check-circle-fill"></i> Saved';
+                    statusSpan.className = 'save-status show success';
+
+                    // Update weighted score
+                    const weightedSpan = document.querySelector(`[data-weighted-id="${enrollmentId}-${componentId}"]`);
+                    if (weightedSpan && data.weighted_score !== null) {
+                        weightedSpan.textContent = data.weighted_score;
+                    } else if (weightedSpan) {
+                        weightedSpan.textContent = '-';
+                    }
+
+                    // Update total
+                    updateTotal(enrollmentId);
+
+                    // Check if all marks are entered
+                    checkAllMarksEntered(enrollmentId);
+
+                    // Hide status after 2 seconds
+                    setTimeout(() => {
+                        statusSpan.classList.remove('show');
+                        input.classList.remove('saved');
+                    }, 2000);
+                } else {
+                    input.classList.add('error');
+                    statusSpan.innerHTML = '<i class="bi bi-x-circle-fill"></i> Error';
+                    statusSpan.className = 'save-status show error';
+                    showAlert(data.error || 'Failed to save marks', 'error');
+                }
+            })
+            .catch(error => {
+                input.classList.add('error');
+                statusSpan.innerHTML = '<i class="bi bi-x-circle-fill"></i> Error';
+                statusSpan.className = 'save-status show error';
+                showAlert('An error occurred while saving marks', 'error');
+                console.error('Error:', error);
+            });
+        }
+
+        function updateTotal(enrollmentId) {
+            const inputs = document.querySelectorAll(`.marks-input[data-enrollment-id="${enrollmentId}"]`);
+            let total = 0;
+
+            inputs.forEach(input => {
+                const componentId = input.dataset.componentId;
+                const weightedSpan = document.querySelector(`[data-weighted-id="${enrollmentId}-${componentId}"]`);
+                if (weightedSpan && weightedSpan.textContent !== '-') {
+                    total += parseFloat(weightedSpan.textContent) || 0;
+                }
+            });
+
+            const totalSpan = document.getElementById(`total-${enrollmentId}`);
+            if (totalSpan) {
+                totalSpan.textContent = total.toFixed(2);
+            }
+        }
+
+        function checkAllMarksEntered(enrollmentId) {
+            const inputs = document.querySelectorAll(`.marks-input[data-enrollment-id="${enrollmentId}"]`);
+            const button = document.querySelector(`.btn-calculate[data-enrollment-id="${enrollmentId}"]`);
+            
+            let allEntered = true;
+            inputs.forEach(input => {
+                if (input.value === '') {
+                    allEntered = false;
+                }
+            });
+
+            if (button) {
+                button.disabled = !allEntered;
+            }
+        }
+
+        // Calculate final grade
+        calculateButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const enrollmentId = this.dataset.enrollmentId;
+                
+                if (confirm('Are you sure you want to calculate and save the final grade?')) {
+                    calculateFinalGrade(enrollmentId, this);
+                }
+            });
+        });
+
+        function calculateFinalGrade(enrollmentId, button) {
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-hourglass-split"></i> Calculating...';
+
+            const formData = new FormData();
+            formData.append('enrollment_id', enrollmentId);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            fetch('/calculate-final-grade/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`Final grade calculated successfully: ${data.grade} (${data.total_marks}/100)`, 'success');
+                    
+                    // Reload page to show final grade
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    button.disabled = false;
+                    button.innerHTML = '<i class="bi bi-calculator"></i> Calculate Final Grade';
+                    showAlert(data.error || 'Failed to calculate final grade', 'error');
+                }
+            })
+            .catch(error => {
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-calculator"></i> Calculate Final Grade';
+                showAlert('An error occurred while calculating final grade', 'error');
+                console.error('Error:', error);
+            });
+        }
+
+        function showAlert(message, type) {
+            const alertClass = type === 'success' ? 'alert-success' : 
+                              type === 'error' ? 'alert-error' : 'alert-info';
+            const icon = type === 'success' ? 'check-circle' : 
+                        type === 'error' ? 'exclamation-triangle' : 'info-circle';
+            
+            alertContainer.innerHTML = `
+                <div class="alert ${alertClass}">
+                    <i class="bi bi-${icon}"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 5000);
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    });
+</script>
+{% endblock %}

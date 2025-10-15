@@ -2462,3 +2462,414 @@ def get_degree_classification(gpa, programme_level):
             'color': '#DC2626',
             'description': 'Below Minimum Requirement'
         }
+    
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
+from django.db.models import Q, Sum
+from django.http import JsonResponse
+from django.utils import timezone
+from decimal import Decimal, InvalidOperation
+from .models import (
+    Student, UnitEnrollment, Semester, AcademicYear, 
+    Unit, AssessmentComponent, StudentMarks, FinalGrade,
+    Lecturer, GradingScheme
+)
+
+
+def is_admin_or_staff(user):
+    """Check if user is admin or staff"""
+    return user.is_staff or user.is_superuser or user.user_type in ['COD', 'DEAN', 'ICT_ADMIN']
+
+
+@login_required
+@user_passes_test(is_admin_or_staff)
+def marks_entry_view(request):
+    """Main view for marks entry - search student and select semester"""
+    
+    # Get all active academic years and semesters
+    academic_years = AcademicYear.objects.filter(is_current=True).order_by('-start_date')
+    semesters = Semester.objects.filter(
+        academic_year__is_current=True
+    ).select_related('academic_year').order_by('-academic_year__start_date', '-semester_number')
+    
+    # Also get past semesters for reference
+    past_semesters = Semester.objects.filter(
+        is_current=False
+    ).select_related('academic_year').order_by('-academic_year__start_date', '-semester_number')[:10]
+    
+    all_semesters = list(semesters) + list(past_semesters)
+    
+    context = {
+        'academic_years': academic_years,
+        'semesters': all_semesters,
+    }
+    
+    return render(request, 'admin/marks_entry.html', context)
+
+
+@login_required
+@user_passes_test(is_admin_or_staff)
+def search_student_ajax(request):
+    """AJAX endpoint to search for student by registration number"""
+    
+    if request.method == 'GET':
+        reg_number = request.GET.get('reg_number', '').strip()
+        
+        if not reg_number:
+            return JsonResponse({'error': 'Registration number is required'}, status=400)
+        
+        try:
+            student = Student.objects.select_related(
+                'user', 'programme'
+            ).get(registration_number__iexact=reg_number)
+            
+            return JsonResponse({
+                'success': True,
+                'student': {
+                    'id': student.user_id,
+                    'registration_number': student.registration_number,
+                    'full_name': f"{student.first_name} {student.last_name}",
+                    'email': student.email or student.user.email,
+                    'programme': student.programme.name,
+                    'programme_code': student.programme.code,
+                    'current_year': student.current_year,
+                }
+            })
+            
+        except Student.DoesNotExist:
+            return JsonResponse({
+                'error': 'Student not found with this registration number'
+            }, status=404)
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+@login_required
+@user_passes_test(is_admin_or_staff)
+def student_units_view(request, student_id, semester_id):
+    """View to display and enter marks for student's enrolled units"""
+    
+    student = get_object_or_404(
+        Student.objects.select_related('user', 'programme'),
+        user_id=student_id
+    )
+    
+    semester = get_object_or_404(
+        Semester.objects.select_related('academic_year'),
+        id=semester_id
+    )
+    
+    # Get all enrollments for this student in this semester
+    enrollments = UnitEnrollment.objects.filter(
+        student=student,
+        semester=semester
+    ).select_related(
+        'unit'
+    ).prefetch_related(
+        'marks__assessment_component'
+    ).order_by('unit__code')
+    
+    # Get the lecturer (if current user is a lecturer)
+    lecturer = None
+    try:
+        if hasattr(request.user, 'lecturer_profile'):
+            lecturer = request.user.lecturer_profile
+    except:
+        pass
+    
+    # Prepare enrollment data with assessments
+    enrollment_data = []
+    for enrollment in enrollments:
+        # Get all assessment components for this unit
+        assessment_components = AssessmentComponent.objects.filter(
+            unit=enrollment.unit
+        ).order_by('component_type')
+        
+        # Get marks for this enrollment
+        marks_dict = {}
+        for mark in enrollment.marks.all():
+            marks_dict[mark.assessment_component.id] = mark
+        
+        # Calculate total marks
+        total_marks = Decimal('0.00')
+        total_weight = Decimal('0.00')
+        
+        assessment_list = []
+        for component in assessment_components:
+            mark_obj = marks_dict.get(component.id)
+            
+            # Calculate weighted score
+            weighted_score = None
+            if mark_obj and mark_obj.marks_obtained is not None:
+                percentage = (mark_obj.marks_obtained / component.max_marks) * 100
+                weighted_score = (percentage * component.weight_percentage) / 100
+                total_marks += weighted_score
+            
+            total_weight += component.weight_percentage
+            
+            assessment_list.append({
+                'component': component,
+                'mark': mark_obj,
+                'weighted_score': weighted_score
+            })
+        
+        # Check if final grade exists
+        try:
+            final_grade = enrollment.final_grade
+        except:
+            final_grade = None
+        
+        enrollment_data.append({
+            'enrollment': enrollment,
+            'assessments': assessment_list,
+            'total_marks': round(total_marks, 2),
+            'total_weight': total_weight,
+            'final_grade': final_grade,
+            'has_all_marks': all(a['mark'] is not None and a['mark'].marks_obtained is not None for a in assessment_list)
+        })
+    
+    # Get grading scheme for this programme
+    grading_scheme = GradingScheme.objects.filter(
+        programme=student.programme
+    ).order_by('-min_marks')
+    
+    context = {
+        'student': student,
+        'semester': semester,
+        'enrollment_data': enrollment_data,
+        'grading_scheme': grading_scheme,
+        'lecturer': lecturer,
+    }
+    
+    return render(request, 'admin/student_marks_entry.html', context)
+
+
+@login_required
+@user_passes_test(is_admin_or_staff)
+def save_marks_ajax(request):
+    """AJAX endpoint to save marks for a specific assessment"""
+    
+    if request.method == 'POST':
+        enrollment_id = request.POST.get('enrollment_id')
+        component_id = request.POST.get('component_id')
+        marks = request.POST.get('marks')
+        
+        if not all([enrollment_id, component_id]):
+            return JsonResponse({'error': 'Missing required fields'}, status=400)
+        
+        try:
+            enrollment = UnitEnrollment.objects.get(id=enrollment_id)
+            component = AssessmentComponent.objects.get(id=component_id)
+            
+            # Handle empty marks (delete existing)
+            if marks == '' or marks is None:
+                StudentMarks.objects.filter(
+                    enrollment=enrollment,
+                    assessment_component=component
+                ).delete()
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Marks cleared successfully',
+                    'weighted_score': None
+                })
+            
+            marks = Decimal(marks)
+            
+            # Validate marks
+            if marks < 0 or marks > component.max_marks:
+                return JsonResponse({
+                    'error': f'Marks must be between 0 and {component.max_marks}'
+                }, status=400)
+            
+            # Get or create lecturer
+            lecturer = None
+            try:
+                if hasattr(request.user, 'lecturer_profile'):
+                    lecturer = request.user.lecturer_profile
+                else:
+                    # Get any lecturer as fallback
+                    lecturer = Lecturer.objects.first()
+            except:
+                lecturer = Lecturer.objects.first()
+            
+            if not lecturer:
+                return JsonResponse({'error': 'No lecturer found in system'}, status=400)
+            
+            # Create or update marks
+            mark_obj, created = StudentMarks.objects.update_or_create(
+                enrollment=enrollment,
+                assessment_component=component,
+                defaults={
+                    'marks_obtained': marks,
+                    'entered_by': lecturer
+                }
+            )
+            
+            # Calculate weighted score
+            percentage = (marks / component.max_marks) * 100
+            weighted_score = (percentage * component.weight_percentage) / 100
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Marks saved successfully',
+                'weighted_score': float(round(weighted_score, 2)),
+                'created': created
+            })
+            
+        except (UnitEnrollment.DoesNotExist, AssessmentComponent.DoesNotExist):
+            return JsonResponse({'error': 'Enrollment or Assessment Component not found'}, status=404)
+        except (ValueError, InvalidOperation) as e:
+            return JsonResponse({'error': f'Invalid marks value: {str(e)}'}, status=400)
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+@login_required
+@user_passes_test(is_admin_or_staff)
+def calculate_final_grade_ajax(request):
+    """AJAX endpoint to calculate and save final grade for an enrollment"""
+    
+    if request.method == 'POST':
+        enrollment_id = request.POST.get('enrollment_id')
+        
+        if not enrollment_id:
+            return JsonResponse({'error': 'Enrollment ID is required'}, status=400)
+        
+        try:
+            enrollment = UnitEnrollment.objects.select_related('unit', 'student__programme').get(id=enrollment_id)
+            
+            # Get all assessment components for this unit
+            components = AssessmentComponent.objects.filter(unit=enrollment.unit)
+            
+            if not components.exists():
+                return JsonResponse({'error': 'No assessment components defined for this unit'}, status=400)
+            
+            # Check if all components have marks
+            marks = StudentMarks.objects.filter(
+                enrollment=enrollment,
+                assessment_component__in=components
+            )
+            
+            if marks.count() != components.count():
+                return JsonResponse({
+                    'error': 'Not all assessment components have been graded'
+                }, status=400)
+            
+            # Calculate total marks (weighted)
+            total_marks = Decimal('0.00')
+            
+            for mark in marks:
+                component = mark.assessment_component
+                percentage = (mark.marks_obtained / component.max_marks) * 100
+                weighted_score = (percentage * component.weight_percentage) / 100
+                total_marks += weighted_score
+            
+            # Determine grade based on grading scheme
+            grading_scheme = GradingScheme.objects.filter(
+                programme=enrollment.student.programme,
+                min_marks__lte=total_marks,
+                max_marks__gte=total_marks
+            ).first()
+            
+            if not grading_scheme:
+                return JsonResponse({'error': 'No matching grade found in grading scheme'}, status=400)
+            
+            # Get or create lecturer
+            lecturer = None
+            try:
+                if hasattr(request.user, 'lecturer_profile'):
+                    lecturer = request.user.lecturer_profile
+            except:
+                pass
+            
+            # Create or update final grade
+            final_grade, created = FinalGrade.objects.update_or_create(
+                enrollment=enrollment,
+                defaults={
+                    'total_marks': total_marks,
+                    'grade': grading_scheme.grade,
+                    'grade_point': grading_scheme.grade_point,
+                    'approved_by': lecturer,
+                    'is_approved': True
+                }
+            )
+            
+            # Update enrollment status
+            enrollment.status = 'COMPLETED'
+            enrollment.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Final grade calculated successfully',
+                'total_marks': float(round(total_marks, 2)),
+                'grade': grading_scheme.grade,
+                'grade_point': float(grading_scheme.grade_point),
+                'description': grading_scheme.description
+            })
+            
+        except UnitEnrollment.DoesNotExist:
+            return JsonResponse({'error': 'Enrollment not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': f'Error calculating grade: {str(e)}'}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+@login_required
+@user_passes_test(is_admin_or_staff)
+def bulk_marks_entry_view(request, semester_id, unit_id):
+    """View for entering marks for all students in a unit at once"""
+    
+    semester = get_object_or_404(
+        Semester.objects.select_related('academic_year'),
+        id=semester_id
+    )
+    
+    unit = get_object_or_404(Unit, id=unit_id)
+    
+    # Get all enrollments for this unit in this semester
+    enrollments = UnitEnrollment.objects.filter(
+        semester=semester,
+        unit=unit,
+        status__in=['ENROLLED', 'COMPLETED']
+    ).select_related(
+        'student__user',
+        'student__programme'
+    ).prefetch_related(
+        'marks__assessment_component'
+    ).order_by('student__registration_number')
+    
+    # Get assessment components for this unit
+    components = AssessmentComponent.objects.filter(
+        unit=unit
+    ).order_by('component_type')
+    
+    # Prepare data
+    student_data = []
+    for enrollment in enrollments:
+        marks_dict = {}
+        for mark in enrollment.marks.all():
+            marks_dict[mark.assessment_component.id] = mark.marks_obtained
+        
+        # Get final grade if exists
+        try:
+            final_grade = enrollment.final_grade
+        except:
+            final_grade = None
+        
+        student_data.append({
+            'enrollment': enrollment,
+            'student': enrollment.student,
+            'marks': marks_dict,
+            'final_grade': final_grade
+        })
+    
+    context = {
+        'semester': semester,
+        'unit': unit,
+        'components': components,
+        'student_data': student_data,
+    }
+    
+    return render(request, 'admin/bulk_marks_entry.html', context)
