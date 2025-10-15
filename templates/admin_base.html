@@ -559,13 +559,13 @@
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'enrollment_management' %}active{% endif %}">Enrollment Management</a>
             </div>
 
-            <div class="menu-item has-submenu {% if 'lecturers' in request.resolver_match.url_name %}active{% endif %}" data-submenu="lecturers">
+            <div class="menu-item has-submenu {% if 'lecturer' in request.resolver_match.url_name %}active{% endif %}" data-submenu="lecturers">
                 <i class="fas fa-chalkboard-teacher"></i>
                 <span>Lecturers</span>
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-lecturers">
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'all_lecturers' %}active{% endif %}">All Lecturers</a>
+                <a href="{% url 'lecturer_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'lecturer_list' %}active{% endif %}">All Lecturers</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'add_lecturer' %}active{% endif %}">Add New Lecturer</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'unit_allocations' %}active{% endif %}">Unit Allocations</a>
             </div>
