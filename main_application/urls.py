@@ -92,4 +92,6 @@ urlpatterns = [
     path('admin-events/<int:pk>/update/', views.event_update, name='event_update'),
     path('admin-events/<int:pk>/delete/', views.event_delete, name='event_delete'),
 
+    path('admin-reports/', views.admin_reports, name='admin_reports'),
+
 ]

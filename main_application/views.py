@@ -4714,3 +4714,228 @@ def event_delete(request, pk):
         'registration_count': registration_count,
     }
     return render(request, 'events/event_confirm_delete.html', context)
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Avg, Sum, Q
+from django.db.models.functions import TruncMonth
+from datetime import datetime, timedelta
+from .models import (
+    Student, Programme, Department, UnitEnrollment, 
+    SemesterRegistration, FeePayment, Semester, AcademicYear
+)
+import json
+
+
+@login_required
+def admin_reports(request):
+    """
+    Comprehensive admin reports dashboard with multiple chart types
+    """
+    
+    # Get current academic year and semester
+    current_academic_year = AcademicYear.objects.filter(is_current=True).first()
+    current_semester = Semester.objects.filter(is_current=True).first()
+    
+    # ===========================
+    # 1. STUDENT ENROLLMENT BY PROGRAMME (Bar Chart)
+    # ===========================
+    programme_enrollments = Student.objects.filter(is_active=True).values(
+        'programme__code', 'programme__name'
+    ).annotate(
+        student_count=Count('user')
+    ).order_by('-student_count')
+    
+    programme_labels = [item['programme__code'] for item in programme_enrollments]
+    programme_data = [item['student_count'] for item in programme_enrollments]
+    
+    
+    # ===========================
+    # 2. STUDENT DISTRIBUTION BY YEAR LEVEL (Pie Chart)
+    # ===========================
+    year_distribution = Student.objects.filter(is_active=True).values(
+        'current_year'
+    ).annotate(
+        count=Count('user')
+    ).order_by('current_year')
+    
+    year_labels = [f"Year {item['current_year']}" for item in year_distribution]
+    year_data = [item['count'] for item in year_distribution]
+    
+    
+    # ===========================
+    # 3. ENROLLMENT TRENDS (Line Chart) - Last 6 months
+    # ===========================
+    six_months_ago = datetime.now() - timedelta(days=180)
+    
+    enrollment_trends = UnitEnrollment.objects.filter(
+        enrollment_date__gte=six_months_ago
+    ).annotate(
+        month=TruncMonth('enrollment_date')
+    ).values('month').annotate(
+        count=Count('id')
+    ).order_by('month')
+    
+    trend_labels = [item['month'].strftime('%b %Y') for item in enrollment_trends]
+    trend_data = [item['count'] for item in enrollment_trends]
+    
+    
+    # ===========================
+    # 4. ENROLLMENT STATUS DISTRIBUTION (Donut Chart)
+    # ===========================
+    status_distribution = UnitEnrollment.objects.values('status').annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    status_labels = [item['status'].replace('_', ' ').title() for item in status_distribution]
+    status_data = [item['count'] for item in status_distribution]
+    
+    
+    # ===========================
+    # 5. DEPARTMENT STUDENT COUNT (Bar Chart - Horizontal)
+    # ===========================
+    department_stats = Department.objects.annotate(
+        student_count=Count('programmes__students', filter=Q(programmes__students__is_active=True))
+    ).order_by('-student_count')[:10]
+    
+    dept_labels = [dept.code for dept in department_stats]
+    dept_data = [dept.student_count for dept in department_stats]
+    
+    
+    # ===========================
+    # 6. FEE PAYMENT STATUS (Pie Chart)
+    # ===========================
+    if current_semester:
+        payment_status = FeePayment.objects.filter(
+            semester=current_semester
+        ).values('status').annotate(
+            count=Count('id')
+        )
+        
+        payment_labels = [item['status'].replace('_', ' ').title() for item in payment_status]
+        payment_data = [item['count'] for item in payment_status]
+    else:
+        payment_labels = []
+        payment_data = []
+    
+    
+    # ===========================
+    # 7. REGISTRATION TRENDS BY SEMESTER (Line Chart)
+    # ===========================
+    recent_semesters = Semester.objects.all().order_by('-start_date')[:6]
+    
+    semester_registrations = []
+    semester_labels = []
+    
+    for sem in reversed(recent_semesters):
+        reg_count = SemesterRegistration.objects.filter(semester=sem).count()
+        semester_registrations.append(reg_count)
+        semester_labels.append(str(sem.semester_number))
+    
+    
+    # ===========================
+    # 8. PROGRAMME LEVEL DISTRIBUTION (Donut Chart)
+    # ===========================
+    level_distribution = Programme.objects.filter(is_active=True).values(
+        'level'
+    ).annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    level_labels = [item['level'].replace('_', ' ').title() for item in level_distribution]
+    level_data = [item['count'] for item in level_distribution]
+    
+    
+    # ===========================
+    # SUMMARY STATISTICS
+    # ===========================
+    total_students = Student.objects.filter(is_active=True).count()
+    total_programmes = Programme.objects.filter(is_active=True).count()
+    total_departments = Department.objects.count()
+    
+    if current_semester:
+        current_enrollments = UnitEnrollment.objects.filter(
+            semester=current_semester,
+            status='ENROLLED'
+        ).count()
+    else:
+        current_enrollments = 0
+    
+    # Calculate completion rate
+    total_enrollments = UnitEnrollment.objects.count()
+    completed_enrollments = UnitEnrollment.objects.filter(status='COMPLETED').count()
+    completion_rate = (completed_enrollments / total_enrollments * 100) if total_enrollments > 0 else 0
+    
+    
+    # ===========================
+    # 9. GENDER DISTRIBUTION (Pie Chart) - If you have gender field
+    # ===========================
+    # Assuming you might add gender field later
+    gender_data = [45, 55]  # Placeholder - Male, Female percentages
+    gender_labels = ['Male', 'Female']
+    
+    
+    # ===========================
+    # 10. MONTHLY REVENUE TREND (Line Chart)
+    # ===========================
+    if current_academic_year:
+        monthly_revenue = FeePayment.objects.filter(
+            semester__academic_year=current_academic_year
+        ).annotate(
+            month=TruncMonth('payment_date')
+        ).values('month').annotate(
+            total=Sum('amount_paid')
+        ).order_by('month')
+        
+        revenue_labels = [item['month'].strftime('%b %Y') for item in monthly_revenue]
+        revenue_data = [float(item['total']) for item in monthly_revenue]
+    else:
+        revenue_labels = []
+        revenue_data = []
+    
+    
+    context = {
+        # Summary Stats
+        'total_students': total_students,
+        'total_programmes': total_programmes,
+        'total_departments': total_departments,
+        'current_enrollments': current_enrollments,
+        'completion_rate': round(completion_rate, 1),
+        
+        # Chart Data (converted to JSON for JavaScript)
+        'programme_labels': json.dumps(programme_labels),
+        'programme_data': json.dumps(programme_data),
+        
+        'year_labels': json.dumps(year_labels),
+        'year_data': json.dumps(year_data),
+        
+        'trend_labels': json.dumps(trend_labels),
+        'trend_data': json.dumps(trend_data),
+        
+        'status_labels': json.dumps(status_labels),
+        'status_data': json.dumps(status_data),
+        
+        'dept_labels': json.dumps(dept_labels),
+        'dept_data': json.dumps(dept_data),
+        
+        'payment_labels': json.dumps(payment_labels),
+        'payment_data': json.dumps(payment_data),
+        
+        'semester_labels': json.dumps(semester_labels),
+        'semester_registrations': json.dumps(semester_registrations),
+        
+        'level_labels': json.dumps(level_labels),
+        'level_data': json.dumps(level_data),
+        
+        'gender_labels': json.dumps(gender_labels),
+        'gender_data': json.dumps(gender_data),
+        
+        'revenue_labels': json.dumps(revenue_labels),
+        'revenue_data': json.dumps(revenue_data),
+        
+        # Additional Info
+        'current_semester': current_semester,
+        'current_academic_year': current_academic_year,
+    }
+    
+    return render(request, 'admin/reports.html', context)
