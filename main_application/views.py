@@ -6035,3 +6035,224 @@ def get_programmes_by_department(request, department_id):
             'success': False,
             'error': str(e)
         }, status=400)
+    
+
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.hashers import make_password
+from django.db import transaction
+from .models import User, Student, Lecturer, Department, Programme, Intake, AcademicYear
+import json
+from datetime import datetime
+
+def is_admin(user):
+    """Check if user is admin/ICT admin"""
+    return user.is_superuser or user.user_type == 'ICT_ADMIN'
+
+@login_required
+@user_passes_test(is_admin)
+def create_user_view(request):
+    """
+    User creation view - Admin only
+    Handles all user types: STUDENT, LECTURER, COD, DEAN, ICT_ADMIN
+    """
+    if request.method == 'POST':
+        try:
+            with transaction.atomic():
+                # Get basic user data
+                username = request.POST.get('username').strip()
+                email = request.POST.get('email').strip()
+                first_name = request.POST.get('first_name').strip()
+                last_name = request.POST.get('last_name').strip()
+                password = request.POST.get('password')
+                phone_number = request.POST.get('phone_number', '').strip()
+                user_type = request.POST.get('user_type')
+                is_staff = request.POST.get('is_staff') == 'on'
+                is_superuser = request.POST.get('is_superuser') == 'on'
+                
+                # Validate required fields
+                if not all([username, email, first_name, last_name, password, user_type]):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'All required fields must be filled'
+                    }, status=400)
+                
+                # Validate user type
+                valid_user_types = [choice[0] for choice in User.USER_TYPES]
+                if user_type not in valid_user_types:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid user type'
+                    }, status=400)
+                
+                # Check if username exists
+                if User.objects.filter(username=username).exists():
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Username already exists'
+                    }, status=400)
+                
+                # Check if email exists
+                if User.objects.filter(email=email).exists():
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Email already exists'
+                    }, status=400)
+                
+                # Create base user
+                user = User.objects.create(
+                    username=username,
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    phone_number=phone_number,
+                    user_type=user_type,
+                    is_staff=is_staff,
+                    is_superuser=is_superuser,
+                    is_active_user=True,
+                    is_active=True
+                )
+                user.set_password(password)
+                user.save()
+                
+                # Create profile based on user type
+                if user_type == 'STUDENT':
+                    registration_number = request.POST.get('registration_number', '').strip()
+                    programme_id = request.POST.get('programme')
+                    current_year = request.POST.get('current_year')
+                    intake_id = request.POST.get('intake')
+                    admission_date = request.POST.get('admission_date')
+                    
+                    # Validate student required fields
+                    if not all([registration_number, programme_id, current_year, intake_id, admission_date]):
+                        user.delete()  # Rollback user creation
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'All student fields are required'
+                        }, status=400)
+                    
+                    # Check if registration number exists
+                    if Student.objects.filter(registration_number=registration_number).exists():
+                        user.delete()
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Registration number already exists'
+                        }, status=400)
+                    
+                    # Create student profile
+                    Student.objects.create(
+                        user=user,
+                        registration_number=registration_number,
+                        first_name=first_name,
+                        last_name=last_name,
+                        surname=request.POST.get('surname', ''),
+                        programme_id=programme_id,
+                        current_year=int(current_year),
+                        intake_id=intake_id,
+                        admission_date=admission_date,
+                        phone=request.POST.get('student_phone', ''),
+                        email=email,
+                        date_of_birth=request.POST.get('date_of_birth') or None,
+                        address=request.POST.get('address', ''),
+                        parent_name=request.POST.get('parent_name', ''),
+                        parent_phone=request.POST.get('parent_phone', ''),
+                        guardian_name=request.POST.get('guardian_name', ''),
+                        guardian_phone=request.POST.get('guardian_phone', ''),
+                        is_active=True
+                    )
+                    profile_created = "Student profile"
+                
+                elif user_type in ['LECTURER', 'COD', 'DEAN']:
+                    staff_number = request.POST.get('staff_number', '').strip()
+                    department_id = request.POST.get('department')
+                    
+                    # Validate lecturer/staff required fields
+                    if not all([staff_number, department_id]):
+                        user.delete()
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Staff number and department are required for academic staff'
+                        }, status=400)
+                    
+                    # Check if staff number exists
+                    if Lecturer.objects.filter(staff_number=staff_number).exists():
+                        user.delete()
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Staff number already exists'
+                        }, status=400)
+                    
+                    # Create lecturer profile (COD and DEAN also use Lecturer model)
+                    Lecturer.objects.create(
+                        user=user,
+                        staff_number=staff_number,
+                        department_id=department_id,
+                        specialization=request.POST.get('specialization', ''),
+                        office_location=request.POST.get('office_location', ''),
+                        consultation_hours=request.POST.get('consultation_hours', ''),
+                        is_active=True
+                    )
+                    
+                    # If COD, update department head
+                    if user_type == 'COD':
+                        department = Department.objects.get(id=department_id)
+                        department.head_of_department = user
+                        department.save()
+                        profile_created = "Chairman of Department profile"
+                    elif user_type == 'DEAN':
+                        profile_created = "Dean profile"
+                    else:
+                        profile_created = "Lecturer profile"
+                
+                elif user_type == 'ICT_ADMIN':
+                    # ICT Admin doesn't need additional profile
+                    # Just ensure they have staff and superuser status
+                    user.is_staff = True
+                    user.is_superuser = True
+                    user.save()
+                    profile_created = "ICT Administrator account"
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'{profile_created} created successfully for {username}',
+                    'user_id': user.id,
+                    'user_type': user_type
+                })
+                
+        except Department.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Selected department does not exist'
+            }, status=400)
+        except Programme.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Selected programme does not exist'
+            }, status=400)
+        except Intake.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Selected intake does not exist'
+            }, status=400)
+        except ValueError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Error creating user: {str(e)}'
+            }, status=500)
+    
+    # GET request - show form
+    context = {
+        'departments': Department.objects.all().order_by('name'),
+        'programmes': Programme.objects.filter(is_active=True).order_by('name'),
+        'intakes': Intake.objects.filter(is_active=True).order_by('-intake_date'),
+        'user_types': User.USER_TYPES,
+        'year_levels': Student.YEAR_LEVELS,
+    }
+    return render(request, 'admin/create_user.html', context)

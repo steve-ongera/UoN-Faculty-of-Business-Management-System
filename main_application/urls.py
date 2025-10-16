@@ -115,5 +115,6 @@ urlpatterns = [
     path('api/users/bulk-update/', views.bulk_update_users, name='bulk_update_users'),
     path('api/users/<int:user_id>/delete/', views.delete_user, name='delete_user'),
     path('api/departments/<int:department_id>/programmes/', views.get_programmes_by_department, name='get_programmes_by_department'),
+    path('create_user_view/', views.create_user_view , name='create_user'),
 ]
 
