@@ -7041,3 +7041,414 @@ def delete_semester(request, semester_id):
         return JsonResponse({'success': False, 'message': 'Semester not found'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Count, Prefetch
+from django.core.paginator import Paginator
+from .models import Unit, Department, ProgrammeUnit, Programme
+import json
+
+
+@login_required
+def unit_management(request):
+    """Main view for unit management organized by programmes"""
+    # Get all programmes with their units
+    programmes = Programme.objects.filter(is_active=True).prefetch_related(
+        Prefetch(
+            'programme_units',
+            queryset=ProgrammeUnit.objects.select_related('unit', 'unit__department')
+        )
+    ).annotate(
+        unit_count=Count('programme_units')
+    ).order_by('level', 'name')
+    
+    # Get all departments for the create/edit form
+    departments = Department.objects.all().order_by('name')
+    
+    # Get all units (for assigning to programmes)
+    all_units = Unit.objects.select_related('department').order_by('code')
+    
+    context = {
+        'programmes': programmes,
+        'departments': departments,
+        'all_units': all_units,
+    }
+    return render(request, 'admin/unit_management.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_programme_units(request, programme_id):
+    """Get all units for a specific programme"""
+    try:
+        programme_units = ProgrammeUnit.objects.filter(
+            programme_id=programme_id
+        ).select_related('unit', 'unit__department').order_by('year_level', 'semester', 'unit__code')
+        
+        data = [{
+            'id': pu.id,
+            'unit_id': pu.unit.id,
+            'unit_code': pu.unit.code,
+            'unit_name': pu.unit.name,
+            'department': pu.unit.department.name,
+            'credit_hours': pu.unit.credit_hours,
+            'year_level': pu.year_level,
+            'year_display': pu.get_year_level_display(),
+            'semester': pu.semester,
+            'semester_display': f'Semester {pu.semester}',
+            'is_mandatory': pu.is_mandatory,
+            'is_core': pu.unit.is_core,
+        } for pu in programme_units]
+        
+        return JsonResponse({'success': True, 'data': data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_unit(request, unit_id):
+    """Get single unit details"""
+    try:
+        unit = Unit.objects.select_related('department').get(id=unit_id)
+        
+        # Get prerequisites
+        prerequisites = list(unit.prerequisites.values_list('id', flat=True))
+        
+        data = {
+            'id': unit.id,
+            'code': unit.code,
+            'name': unit.name,
+            'description': unit.description,
+            'credit_hours': unit.credit_hours,
+            'department_id': unit.department.id,
+            'is_core': unit.is_core,
+            'prerequisites': prerequisites,
+        }
+        return JsonResponse({'success': True, 'data': data})
+    except Unit.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Unit not found'}, status=404)
+
+
+@login_required
+@require_http_methods(["POST"])
+def create_unit(request):
+    """Create new unit"""
+    try:
+        data = json.loads(request.body)
+        
+        code = data.get('code')
+        name = data.get('name')
+        description = data.get('description', '')
+        credit_hours = int(data.get('credit_hours', 3))
+        department_id = data.get('department_id')
+        is_core = data.get('is_core', True)
+        prerequisites = data.get('prerequisites', [])
+        
+        # Validation
+        if not code or not name or not department_id:
+            return JsonResponse({'success': False, 'message': 'Code, name, and department are required'}, status=400)
+        
+        # Check if code already exists
+        if Unit.objects.filter(code=code).exists():
+            return JsonResponse({'success': False, 'message': 'Unit code already exists'}, status=400)
+        
+        # Create unit
+        unit = Unit.objects.create(
+            code=code.upper(),
+            name=name,
+            description=description,
+            credit_hours=credit_hours,
+            department_id=department_id,
+            is_core=is_core
+        )
+        
+        # Add prerequisites
+        if prerequisites:
+            unit.prerequisites.set(prerequisites)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Unit created successfully',
+            'data': {
+                'id': unit.id,
+                'code': unit.code,
+                'name': unit.name,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_unit(request, unit_id):
+    """Update existing unit"""
+    try:
+        unit = get_object_or_404(Unit, id=unit_id)
+        data = json.loads(request.body)
+        
+        code = data.get('code')
+        name = data.get('name')
+        description = data.get('description', '')
+        credit_hours = int(data.get('credit_hours', 3))
+        department_id = data.get('department_id')
+        is_core = data.get('is_core', True)
+        prerequisites = data.get('prerequisites', [])
+        
+        # Check if code already exists (excluding current)
+        if Unit.objects.filter(code=code).exclude(id=unit_id).exists():
+            return JsonResponse({'success': False, 'message': 'Unit code already exists'}, status=400)
+        
+        # Update unit
+        unit.code = code.upper()
+        unit.name = name
+        unit.description = description
+        unit.credit_hours = credit_hours
+        unit.department_id = department_id
+        unit.is_core = is_core
+        unit.save()
+        
+        # Update prerequisites
+        unit.prerequisites.set(prerequisites)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Unit updated successfully',
+            'data': {
+                'id': unit.id,
+                'code': unit.code,
+                'name': unit.name,
+            }
+        })
+    except Unit.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Unit not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_unit(request, unit_id):
+    """Delete unit"""
+    try:
+        unit = get_object_or_404(Unit, id=unit_id)
+        
+        # Check if unit is assigned to any programmes
+        if unit.offered_in_programmes.exists():
+            return JsonResponse({
+                'success': False,
+                'message': 'Cannot delete unit that is assigned to programmes. Remove from programmes first.'
+            }, status=400)
+        
+        # Check if there are enrollments
+        if unit.enrollments.exists():
+            return JsonResponse({
+                'success': False,
+                'message': 'Cannot delete unit with existing enrollments.'
+            }, status=400)
+        
+        unit.delete()
+        return JsonResponse({'success': True, 'message': 'Unit deleted successfully'})
+    except Unit.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Unit not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+# ========================
+# PROGRAMME UNIT ASSIGNMENT
+# ========================
+
+@login_required
+@require_http_methods(["GET"])
+def get_programme_unit(request, programme_unit_id):
+    """Get single programme unit assignment details"""
+    try:
+        pu = ProgrammeUnit.objects.select_related('unit', 'programme').get(id=programme_unit_id)
+        data = {
+            'id': pu.id,
+            'programme_id': pu.programme.id,
+            'unit_id': pu.unit.id,
+            'year_level': pu.year_level,
+            'semester': pu.semester,
+            'is_mandatory': pu.is_mandatory,
+        }
+        return JsonResponse({'success': True, 'data': data})
+    except ProgrammeUnit.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Programme unit not found'}, status=404)
+
+
+@login_required
+@require_http_methods(["POST"])
+def assign_unit_to_programme(request, programme_id):
+    """Assign a unit to a programme"""
+    try:
+        programme = get_object_or_404(Programme, id=programme_id)
+        data = json.loads(request.body)
+        
+        unit_id = data.get('unit_id')
+        year_level = int(data.get('year_level'))
+        semester = int(data.get('semester'))
+        is_mandatory = data.get('is_mandatory', True)
+        
+        # Validation
+        if not unit_id or not year_level or not semester:
+            return JsonResponse({'success': False, 'message': 'All fields are required'}, status=400)
+        
+        # Check if already assigned
+        if ProgrammeUnit.objects.filter(
+            programme=programme,
+            unit_id=unit_id,
+            year_level=year_level,
+            semester=semester
+        ).exists():
+            return JsonResponse({'success': False, 'message': 'Unit already assigned to this programme/year/semester'}, status=400)
+        
+        # Create assignment
+        programme_unit = ProgrammeUnit.objects.create(
+            programme=programme,
+            unit_id=unit_id,
+            year_level=year_level,
+            semester=semester,
+            is_mandatory=is_mandatory
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Unit assigned successfully',
+            'data': {
+                'id': programme_unit.id,
+                'unit_code': programme_unit.unit.code,
+                'unit_name': programme_unit.unit.name,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_programme_unit(request, programme_unit_id):
+    """Update programme unit assignment"""
+    try:
+        programme_unit = get_object_or_404(ProgrammeUnit, id=programme_unit_id)
+        data = json.loads(request.body)
+        
+        year_level = int(data.get('year_level'))
+        semester = int(data.get('semester'))
+        is_mandatory = data.get('is_mandatory', True)
+        
+        # Check if another assignment exists with same details
+        if ProgrammeUnit.objects.filter(
+            programme=programme_unit.programme,
+            unit=programme_unit.unit,
+            year_level=year_level,
+            semester=semester
+        ).exclude(id=programme_unit_id).exists():
+            return JsonResponse({'success': False, 'message': 'Unit already assigned to this year/semester'}, status=400)
+        
+        # Update assignment
+        programme_unit.year_level = year_level
+        programme_unit.semester = semester
+        programme_unit.is_mandatory = is_mandatory
+        programme_unit.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Assignment updated successfully',
+        })
+    except ProgrammeUnit.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Programme unit not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def remove_unit_from_programme(request, programme_unit_id):
+    """Remove unit from programme"""
+    try:
+        programme_unit = get_object_or_404(ProgrammeUnit, id=programme_unit_id)
+        
+        # Check if there are enrollments
+        if programme_unit.unit.enrollments.filter(
+            student__programme=programme_unit.programme
+        ).exists():
+            return JsonResponse({
+                'success': False,
+                'message': 'Cannot remove unit with existing student enrollments.'
+            }, status=400)
+        
+        programme_unit.delete()
+        return JsonResponse({'success': True, 'message': 'Unit removed from programme successfully'})
+    except ProgrammeUnit.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Programme unit not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def search_units(request):
+    """Search units for assignment"""
+    try:
+        query = request.GET.get('q', '')
+        programme_id = request.GET.get('programme_id')
+        
+        units = Unit.objects.select_related('department').filter(
+            Q(code__icontains=query) | Q(name__icontains=query)
+        ).order_by('code')[:20]
+        
+        # Exclude already assigned units if programme_id provided
+        if programme_id:
+            assigned_unit_ids = ProgrammeUnit.objects.filter(
+                programme_id=programme_id
+            ).values_list('unit_id', flat=True)
+            units = units.exclude(id__in=assigned_unit_ids)
+        
+        data = [{
+            'id': unit.id,
+            'code': unit.code,
+            'name': unit.name,
+            'department': unit.department.name,
+            'credit_hours': unit.credit_hours,
+            'is_core': unit.is_core,
+        } for unit in units]
+        
+        return JsonResponse({'success': True, 'data': data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+def unit_detail(request, unit_id):
+    """Detailed view for a single unit"""
+    unit = get_object_or_404(Unit.objects.select_related('department'), id=unit_id)
+    
+    # Get programmes offering this unit
+    programme_assignments = ProgrammeUnit.objects.filter(
+        unit=unit
+    ).select_related('programme', 'programme__department').order_by('programme__name', 'year_level', 'semester')
+    
+    # Get prerequisites and required_for
+    prerequisites = unit.prerequisites.all()
+    required_for = unit.required_for.all()
+    
+    # Get enrollment statistics
+    total_enrollments = unit.enrollments.count()
+    active_enrollments = unit.enrollments.filter(status='ENROLLED').count()
+    
+    context = {
+        'unit': unit,
+        'programme_assignments': programme_assignments,
+        'prerequisites': prerequisites,
+        'required_for': required_for,
+        'total_enrollments': total_enrollments,
+        'active_enrollments': active_enrollments,
+    }
+    return render(request, 'admin/unit_detail.html', context)

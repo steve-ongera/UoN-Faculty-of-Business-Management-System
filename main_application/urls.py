@@ -140,5 +140,26 @@ urlpatterns = [
     path('academic/year/<int:year_id>/semester/create/', views.create_semester, name='create_semester'),
     path('academic/semester/<int:semester_id>/update/', views.update_semester, name='update_semester'),
     path('academic/semester/<int:semester_id>/delete/', views.delete_semester, name='delete_semester'),
+
+    # ========================
+    # UNIT MANAGEMENT
+    # ========================
+    # Unit Management Main View
+    path('admin-units/management/', views.unit_management, name='unit_management'),
+    path('admin-units/<int:unit_id>/', views.unit_detail, name='unit_detail'),
+    
+    # Unit CRUD Operations
+    path('admin-units/get/<int:unit_id>/', views.get_unit, name='get_unit'),
+    path('admin-units/create/', views.create_unit, name='create_unit'),
+    path('admin-units/<int:unit_id>/update/', views.update_unit, name='update_unit'),
+    path('admin-units/<int:unit_id>/delete/', views.delete_unit, name='delete_unit'),
+    path('admin-units/search/', views.search_units, name='search_units'),
+    
+    # Programme Unit Assignment
+    path('admin-programme/<int:programme_id>/units/', views.get_programme_units, name='get_programme_units'),
+    path('admin-programme/<int:programme_id>/units/assign/', views.assign_unit_to_programme, name='assign_unit_to_programme'),
+    path('admin-programme-unit/<int:programme_unit_id>/', views.get_programme_unit, name='get_programme_unit'),
+    path('admin-programme-unit/<int:programme_unit_id>/update/', views.update_programme_unit, name='update_programme_unit'),
+    path('admin-programme-unit/<int:programme_unit_id>/remove/', views.remove_unit_from_programme, name='remove_unit_from_programme'),
 ]
 

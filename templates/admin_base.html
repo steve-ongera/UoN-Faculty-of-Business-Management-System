@@ -587,7 +587,7 @@
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-units">
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'all_units' %}active{% endif %}">All Units</a>
+                <a href="{% url 'unit_management'%}" class="submenu-item {% if request.resolver_match.url_name == 'unit_management' %}active{% endif %}">All Units</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'add_unit' %}active{% endif %}">Add New Unit</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'unit_enrollments' %}active{% endif %}">Unit Enrollments</a>
             </div>
