@@ -591,6 +591,11 @@
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'add_unit' %}active{% endif %}">Add New Unit</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'unit_enrollments' %}active{% endif %}">Unit Enrollments</a>
             </div>
+            <!-- Academic Management -->
+             <a href="{% url 'academic_management'%}" class="menu-item {% if request.resolver_match.url_name == 'academic_management' %}active{% endif %}">
+                <i class="fas fa-chart-line"></i>
+                <span>Academic Management</span>
+            </a>
         </div>
 
         <div class="menu-section">

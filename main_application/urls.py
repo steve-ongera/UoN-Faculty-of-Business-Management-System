@@ -126,5 +126,19 @@ urlpatterns = [
     path('toggle-maintenance/', views.toggle_maintenance_mode, name='toggle_maintenance_mode'),
     path('update-security-settings/', views.update_security_settings, name='update_security_settings'),
     path('audit-logs/', views.get_audit_logs, name='get_audit_logs'),
+
+    # Academic Year Management
+    path('academic/management/', views.academic_management, name='academic_management'),
+    path('academic/year/<int:year_id>/', views.get_academic_year, name='get_academic_year'),
+    path('academic/year/create/', views.create_academic_year, name='create_academic_year'),
+    path('academic/year/<int:year_id>/update/', views.update_academic_year, name='update_academic_year'),
+    path('academic/year/<int:year_id>/delete/', views.delete_academic_year, name='delete_academic_year'),
+    
+    # Semester Management
+    path('academic/year/<int:year_id>/semesters/', views.get_semesters, name='get_semesters'),
+    path('academic/semester/<int:semester_id>/', views.get_semester, name='get_semester'),
+    path('academic/year/<int:year_id>/semester/create/', views.create_semester, name='create_semester'),
+    path('academic/semester/<int:semester_id>/update/', views.update_semester, name='update_semester'),
+    path('academic/semester/<int:semester_id>/delete/', views.delete_semester, name='delete_semester'),
 ]
 

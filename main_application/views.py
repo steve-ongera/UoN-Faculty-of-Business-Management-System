@@ -6980,8 +6980,10 @@ def update_semester(request, semester_id):
             return JsonResponse({'success': False, 'message': 'End date must be after start date'}, status=400)
         
         if registration_deadline > start_date:
-            return JsonResponse({'success': False, 'message': 'Registration deadline must be before start date'}, status=400)
-        
+        # No restriction — just allow it to proceed
+        # return JsonResponse({'success': False, 'message': 'Registration deadline must be before start date'}, status=400)
+          pass
+
         # Check if semester number already exists (excluding current)
         if Semester.objects.filter(
             academic_year=semester.academic_year,
