@@ -93,5 +93,12 @@ urlpatterns = [
     path('admin-events/<int:pk>/delete/', views.event_delete, name='event_delete'),
 
     path('admin-reports/', views.admin_reports, name='admin_reports'),
+    # Timetable Management
+    path('admin-timetable/create/', views.timetable_create, name='timetable_create'),
+    path('admin-timetable/get-units/<int:programme_id>/<int:year_level>/', views.get_programme_units, name='get_programme_units'),
+    path('admin-timetable/get-existing/<int:programme_id>/<int:year_level>/<int:semester_id>/', views.get_existing_timetable, name='get_existing_timetable'),
+    path('admin-timetable/save-slot/', views.save_timetable_slot, name='save_timetable_slot'),
+    path('admin-timetable/delete-slot/<int:slot_id>/', views.delete_timetable_slot, name='delete_timetable_slot'),
+    path('admin-timetable/update-slot/<int:slot_id>/', views.update_timetable_slot, name='update_timetable_slot'),
 
 ]

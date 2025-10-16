@@ -608,7 +608,7 @@
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'assessment_components' %}active{% endif %}">Assessment Components</a>
             </div>
 
-            <a href="{% url 'admin_reports'%}" class="menu-item {% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
+            <a href="{% url 'admin_reports'%}" class="menu-item {% if request.resolver_match.url_name == 'admin_reports' %}active{% endif %}">
                 <i class="fas fa-chart-line"></i>
                 <span>Reports</span>
             </a>
@@ -624,7 +624,7 @@
             </div>
             <div class="submenu" id="submenu-timetable">
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'view_timetable' %}active{% endif %}">View Timetable</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'create_timetable' %}active{% endif %}">Create Timetable</a>
+                <a href="{% url 'timetable_create'%}" class="submenu-item {% if request.resolver_match.url_name == 'timetable_create' %}active{% endif %}">Create Timetable</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'venues' %}active{% endif %}">Venues</a>
             </div>
 

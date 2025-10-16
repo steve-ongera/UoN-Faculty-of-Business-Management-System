@@ -4939,3 +4939,350 @@ def admin_reports(request):
     }
     
     return render(request, 'admin/reports.html', context)
+
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.db.models import Q
+from .models import (
+    Programme, Semester, Unit, UnitAllocation, Lecturer, Venue,
+    TimetableSlot, Department, ProgrammeUnit
+)
+import json
+from datetime import datetime, time
+
+
+@login_required
+def timetable_create(request):
+    """
+    Main timetable creation view with drag and drop functionality
+    """
+    # Get current semester or all semesters
+    current_semester = Semester.objects.filter(is_current=True).first()
+    semesters = Semester.objects.all().order_by('-start_date')[:10]
+    
+    # Get all active programmes grouped by department
+    programmes = Programme.objects.filter(is_active=True).select_related('department').order_by('department', 'name')
+    
+    # Get all departments
+    departments = Department.objects.all().order_by('name')
+    
+    # Get all venues
+    venues = Venue.objects.filter(is_available=True).order_by('building', 'name')
+    
+    # Get all lecturers
+    lecturers = Lecturer.objects.filter(is_active=True).select_related('user', 'department').order_by('staff_number')
+    
+    # Time slots configuration (8 AM to 6 PM)
+    time_slots = [
+        {'start': '08:00', 'end': '09:00', 'label': '08:00 - 09:00'},
+        {'start': '09:00', 'end': '10:00', 'label': '09:00 - 10:00'},
+        {'start': '10:00', 'end': '11:00', 'label': '10:00 - 11:00'},
+        {'start': '11:00', 'end': '12:00', 'label': '11:00 - 12:00'},
+        {'start': '12:00', 'end': '13:00', 'label': '12:00 - 13:00'},
+        {'start': '13:00', 'end': '14:00', 'label': '13:00 - 14:00'},
+        {'start': '14:00', 'end': '15:00', 'label': '14:00 - 15:00'},
+        {'start': '15:00', 'end': '16:00', 'label': '15:00 - 16:00'},
+        {'start': '16:00', 'end': '17:00', 'label': '16:00 - 17:00'},
+        {'start': '17:00', 'end': '18:00', 'label': '17:00 - 18:00'},
+    ]
+    
+    # Days of the week
+    days_of_week = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    
+    context = {
+        'current_semester': current_semester,
+        'semesters': semesters,
+        'programmes': programmes,
+        'departments': departments,
+        'venues': venues,
+        'lecturers': lecturers,
+        'time_slots': time_slots,
+        'days_of_week': days_of_week,
+        'year_levels': [1, 2, 3, 4],
+    }
+    
+    return render(request, 'admin/timetable_create.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_programme_units(request, programme_id, year_level):
+    """
+    Get units for a specific programme and year level
+    """
+    try:
+        programme = get_object_or_404(Programme, id=programme_id)
+        
+        # Get programme units for the specified year level
+        programme_units = ProgrammeUnit.objects.filter(
+            programme=programme,
+            year_level=year_level
+        ).select_related('unit').order_by('semester', 'unit__code')
+        
+        units_data = []
+        for pu in programme_units:
+            units_data.append({
+                'id': pu.unit.id,
+                'code': pu.unit.code,
+                'name': pu.unit.name,
+                'credit_hours': pu.unit.credit_hours,
+                'semester': pu.semester,
+                'is_mandatory': pu.is_mandatory,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'units': units_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_existing_timetable(request, programme_id, year_level, semester_id):
+    """
+    Get existing timetable slots for a programme, year level, and semester
+    """
+    try:
+        timetable_slots = TimetableSlot.objects.filter(
+            programme_id=programme_id,
+            year_level=year_level,
+            unit_allocation__semester_id=semester_id,
+            is_active=True
+        ).select_related(
+            'unit_allocation__unit',
+            'unit_allocation__lecturer__user',
+            'venue'
+        ).order_by('day_of_week', 'start_time')
+        
+        slots_data = []
+        for slot in timetable_slots:
+            slots_data.append({
+                'id': slot.id,
+                'unit_code': slot.unit_allocation.unit.code,
+                'unit_name': slot.unit_allocation.unit.name,
+                'unit_id': slot.unit_allocation.unit.id,
+                'lecturer_name': slot.unit_allocation.lecturer.user.get_full_name(),
+                'lecturer_id': slot.unit_allocation.lecturer.user_id,
+                'venue_code': slot.venue.code,
+                'venue_name': slot.venue.name,
+                'venue_id': slot.venue.id,
+                'day_of_week': slot.day_of_week,
+                'start_time': slot.start_time.strftime('%H:%M'),
+                'end_time': slot.end_time.strftime('%H:%M'),
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'slots': slots_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def save_timetable_slot(request):
+    """
+    Save a new timetable slot
+    """
+    try:
+        data = json.loads(request.body)
+        
+        unit_id = data.get('unit_id')
+        lecturer_id = data.get('lecturer_id')
+        venue_id = data.get('venue_id')
+        programme_id = data.get('programme_id')
+        year_level = data.get('year_level')
+        semester_id = data.get('semester_id')
+        day_of_week = data.get('day_of_week')
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        
+        # Validate required fields
+        if not all([unit_id, lecturer_id, venue_id, programme_id, year_level, semester_id, day_of_week, start_time, end_time]):
+            return JsonResponse({
+                'success': False,
+                'error': 'All fields are required'
+            }, status=400)
+        
+        # Get objects
+        unit = get_object_or_404(Unit, id=unit_id)
+        lecturer = get_object_or_404(Lecturer, user_id=lecturer_id)
+        venue = get_object_or_404(Venue, id=venue_id)
+        programme = get_object_or_404(Programme, id=programme_id)
+        semester = get_object_or_404(Semester, id=semester_id)
+        
+        # Convert time strings to time objects
+        start_time_obj = datetime.strptime(start_time, '%H:%M').time()
+        end_time_obj = datetime.strptime(end_time, '%H:%M').time()
+        
+        # Check for conflicts
+        # 1. Check if venue is already booked at this time
+        venue_conflict = TimetableSlot.objects.filter(
+            venue=venue,
+            day_of_week=day_of_week,
+            unit_allocation__semester=semester,
+            is_active=True
+        ).filter(
+            Q(start_time__lt=end_time_obj, end_time__gt=start_time_obj)
+        ).exists()
+        
+        if venue_conflict:
+            return JsonResponse({
+                'success': False,
+                'error': f'Venue {venue.code} is already booked at this time'
+            }, status=400)
+        
+        # 2. Check if lecturer is already allocated at this time
+        lecturer_conflict = TimetableSlot.objects.filter(
+            unit_allocation__lecturer=lecturer,
+            day_of_week=day_of_week,
+            unit_allocation__semester=semester,
+            is_active=True
+        ).filter(
+            Q(start_time__lt=end_time_obj, end_time__gt=start_time_obj)
+        ).exists()
+        
+        if lecturer_conflict:
+            return JsonResponse({
+                'success': False,
+                'error': f'Lecturer is already allocated to another class at this time'
+            }, status=400)
+        
+        # 3. Check if programme/year already has a class at this time
+        programme_conflict = TimetableSlot.objects.filter(
+            programme=programme,
+            year_level=year_level,
+            day_of_week=day_of_week,
+            unit_allocation__semester=semester,
+            is_active=True
+        ).filter(
+            Q(start_time__lt=end_time_obj, end_time__gt=start_time_obj)
+        ).exists()
+        
+        if programme_conflict:
+            return JsonResponse({
+                'success': False,
+                'error': f'This programme/year already has a class scheduled at this time'
+            }, status=400)
+        
+        # Get or create unit allocation
+        unit_allocation, created = UnitAllocation.objects.get_or_create(
+            unit=unit,
+            lecturer=lecturer,
+            semester=semester,
+            defaults={'is_active': True}
+        )
+        
+        # Add programme to allocation if not already added
+        if not unit_allocation.programmes.filter(id=programme_id).exists():
+            unit_allocation.programmes.add(programme)
+        
+        # Create timetable slot
+        timetable_slot = TimetableSlot.objects.create(
+            unit_allocation=unit_allocation,
+            venue=venue,
+            day_of_week=day_of_week,
+            start_time=start_time_obj,
+            end_time=end_time_obj,
+            programme=programme,
+            year_level=year_level,
+            created_by=request.user,
+            is_active=True
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Timetable slot saved successfully',
+            'slot': {
+                'id': timetable_slot.id,
+                'unit_code': unit.code,
+                'unit_name': unit.name,
+                'unit_id': unit.id,
+                'lecturer_name': lecturer.user.get_full_name(),
+                'lecturer_id': lecturer.user_id,
+                'venue_code': venue.code,
+                'venue_name': venue.name,
+                'venue_id': venue.id,
+                'day_of_week': day_of_week,
+                'start_time': start_time,
+                'end_time': end_time,
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_timetable_slot(request, slot_id):
+    """
+    Delete a timetable slot
+    """
+    try:
+        slot = get_object_or_404(TimetableSlot, id=slot_id)
+        slot.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Timetable slot deleted successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_timetable_slot(request, slot_id):
+    """
+    Update an existing timetable slot
+    """
+    try:
+        data = json.loads(request.body)
+        slot = get_object_or_404(TimetableSlot, id=slot_id)
+        
+        lecturer_id = data.get('lecturer_id')
+        venue_id = data.get('venue_id')
+        
+        if lecturer_id:
+            lecturer = get_object_or_404(Lecturer, user_id=lecturer_id)
+            # Update unit allocation with new lecturer
+            slot.unit_allocation.lecturer = lecturer
+            slot.unit_allocation.save()
+        
+        if venue_id:
+            venue = get_object_or_404(Venue, id=venue_id)
+            slot.venue = venue
+            slot.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Timetable slot updated successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)

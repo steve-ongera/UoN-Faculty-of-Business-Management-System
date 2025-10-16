@@ -1,0 +1,855 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Timetable Management{% endblock %}
+
+{% block page_title %}Timetable Management{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .control-panel {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #475569;
+    }
+
+    .form-group select {
+        padding: 10px;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        font-size: 14px;
+        background: white;
+        color: #1E293B;
+    }
+
+    .form-group select:focus {
+        outline: none;
+        border-color: #4F46E5;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+    }
+
+    .btn-secondary {
+        background: #64748B;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #475569;
+    }
+
+    .available-units {
+        background: #F8FAFC;
+        border: 2px dashed #CBD5E1;
+        border-radius: 5px;
+        padding: 15px;
+        min-height: 150px;
+        margin-bottom: 20px;
+    }
+
+    .units-header {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .unit-item {
+        background: white;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        padding: 12px;
+        margin-bottom: 10px;
+        cursor: move;
+        transition: all 0.2s ease;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .unit-item:hover {
+        border-color: #4F46E5;
+        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
+    }
+
+    .unit-item.dragging {
+        opacity: 0.5;
+    }
+
+    .unit-info {
+        flex: 1;
+    }
+
+    .unit-code {
+        font-weight: 600;
+        color: #1E293B;
+        font-size: 14px;
+    }
+
+    .unit-name {
+        color: #64748B;
+        font-size: 13px;
+        margin-top: 2px;
+    }
+
+    .unit-credits {
+        background: #E0E7FF;
+        color: #4338CA;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .timetable-container {
+        overflow-x: auto;
+        background: white;
+        border-radius: 5px;
+        border: 1px solid #E2E8F0;
+    }
+
+    .timetable-grid {
+        display: grid;
+        grid-template-columns: 100px repeat(6, 1fr);
+        min-width: 900px;
+    }
+
+    .time-label {
+        padding: 12px 8px;
+        background: #F8FAFC;
+        border-bottom: 1px solid #E2E8F0;
+        border-right: 1px solid #E2E8F0;
+        font-size: 12px;
+        font-weight: 600;
+        color: #475569;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .day-header {
+        padding: 15px;
+        background: #4F46E5;
+        color: white;
+        text-align: center;
+        font-weight: 600;
+        font-size: 13px;
+        border-bottom: 1px solid #4338CA;
+    }
+
+    .timetable-cell {
+        min-height: 70px;
+        border-bottom: 1px solid #E2E8F0;
+        border-right: 1px solid #E2E8F0;
+        padding: 5px;
+        background: white;
+        transition: background 0.2s ease;
+    }
+
+    .timetable-cell.drop-target {
+        background: #EEF2FF;
+        border: 2px dashed #4F46E5;
+    }
+
+    .timetable-cell:hover {
+        background: #F8FAFC;
+    }
+
+    .scheduled-class {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 12px;
+        height: 100%;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .scheduled-class:hover {
+        opacity: 0.9;
+    }
+
+    .scheduled-class .class-code {
+        font-weight: 700;
+        margin-bottom: 4px;
+        font-size: 13px;
+    }
+
+    .scheduled-class .class-details {
+        font-size: 11px;
+        opacity: 0.95;
+        margin-bottom: 2px;
+    }
+
+    .scheduled-class .delete-btn {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border: none;
+        color: white;
+        width: 20px;
+        height: 20px;
+        border-radius: 3px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+    }
+
+    .scheduled-class .delete-btn:hover {
+        background: rgba(255, 255, 255, 0.5);
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal.show {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 20px;
+    }
+
+    .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .modal-footer {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+
+    .alert {
+        padding: 12px 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+    }
+
+    .alert-success {
+        background: #D1FAE5;
+        color: #065F46;
+        border-left: 4px solid #10B981;
+    }
+
+    .alert-danger {
+        background: #FEE2E2;
+        color: #991B1B;
+        border-left: 4px solid #EF4444;
+    }
+
+    .alert-info {
+        background: #DBEAFE;
+        color: #1E3A8A;
+        border-left: 4px solid #3B82F6;
+    }
+
+    .loading-spinner {
+        display: none;
+        text-align: center;
+        padding: 20px;
+        color: #64748B;
+    }
+
+    .loading-spinner.show {
+        display: block;
+    }
+
+    @media (max-width: 768px) {
+        .control-panel {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Timetable Management</li>
+    </ol>
+</nav>
+
+<!-- Alert Messages -->
+<div id="alertContainer"></div>
+
+<!-- Control Panel -->
+<div class="section-container">
+    <div class="control-panel">
+        <div class="form-group">
+            <label for="semester"><i class="bi bi-calendar3"></i> Semester</label>
+            <select id="semester" required>
+                <option value="">Select Semester</option>
+                {% for semester in semesters %}
+                <option value="{{ semester.id }}" {% if semester.is_current %}selected{% endif %}>
+                    {{ semester }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="programme"><i class="bi bi-book"></i> Programme</label>
+            <select id="programme" required>
+                <option value="">Select Programme</option>
+                {% for programme in programmes %}
+                <option value="{{ programme.id }}" data-dept="{{ programme.department.name }}">
+                    {{ programme.code }} - {{ programme.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="yearLevel"><i class="bi bi-mortarboard"></i> Year Level</label>
+            <select id="yearLevel" required>
+                <option value="">Select Year</option>
+                {% for year in year_levels %}
+                <option value="{{ year }}">Year {{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group" style="align-self: flex-end;">
+            <button type="button" id="loadTimetable" class="btn btn-primary">
+                <i class="bi bi-arrow-clockwise"></i> Load Timetable
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Available Units -->
+<div class="section-container">
+    <div class="available-units">
+        <div class="units-header">
+            <i class="bi bi-grid-3x3-gap"></i>
+            Available Units (Drag to Timetable)
+        </div>
+        <div id="unitsList">
+            <p style="color: #64748B; text-align: center; padding: 20px;">
+                Select a programme and year level to view available units
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Timetable Grid -->
+<div class="section-container">
+    <h3 style="margin-bottom: 15px; color: #1E293B; font-size: 18px; font-weight: 600;">
+        <i class="bi bi-calendar-week"></i> Weekly Timetable
+    </h3>
+    <div class="loading-spinner" id="loadingSpinner">
+        <i class="bi bi-hourglass-split"></i> Loading timetable...
+    </div>
+    <div class="timetable-container" id="timetableContainer">
+        <div class="timetable-grid">
+            <!-- Header Row -->
+            <div class="time-label">Time</div>
+            {% for day in days_of_week %}
+            <div class="day-header">{{ day|title }}</div>
+            {% endfor %}
+
+            <!-- Time Slots -->
+            {% for slot in time_slots %}
+            <div class="time-label">{{ slot.label }}</div>
+            {% for day in days_of_week %}
+            <div class="timetable-cell" 
+                 data-day="{{ day }}" 
+                 data-start="{{ slot.start }}" 
+                 data-end="{{ slot.end }}">
+            </div>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Class Details -->
+<div id="classModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span id="modalTitle">Schedule Class</span>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="modalUnitId">
+            <input type="hidden" id="modalDay">
+            <input type="hidden" id="modalStartTime">
+            <input type="hidden" id="modalEndTime">
+
+            <div class="form-group">
+                <label><i class="bi bi-book"></i> Unit</label>
+                <input type="text" id="modalUnitName" readonly style="padding: 10px; border: 1px solid #E2E8F0; border-radius: 5px; background: #F8FAFC;">
+            </div>
+
+            <div class="form-group">
+                <label><i class="bi bi-person"></i> Lecturer</label>
+                <select id="modalLecturer" required style="padding: 10px; border: 1px solid #E2E8F0; border-radius: 5px;">
+                    <option value="">Select Lecturer</option>
+                    {% for lecturer in lecturers %}
+                    <option value="{{ lecturer.user.id }}">
+                        {{ lecturer.user.get_full_name }} - {{ lecturer.department.code }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label><i class="bi bi-geo-alt"></i> Venue</label>
+                <select id="modalVenue" required style="padding: 10px; border: 1px solid #E2E8F0; border-radius: 5px;">
+                    <option value="">Select Venue</option>
+                    {% for venue in venues %}
+                    <option value="{{ venue.id }}" data-capacity="{{ venue.capacity }}">
+                        {{ venue.code }} - {{ venue.name }} (Cap: {{ venue.capacity }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label><i class="bi bi-clock"></i> Time</label>
+                <input type="text" id="modalTimeSlot" readonly style="padding: 10px; border: 1px solid #E2E8F0; border-radius: 5px; background: #F8FAFC;">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal()">
+                <i class="bi bi-x"></i> Cancel
+            </button>
+            <button type="button" class="btn btn-primary" onclick="saveClass()">
+                <i class="bi bi-check"></i> Save
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Global variables
+    let currentProgramme = null;
+    let currentYearLevel = null;
+    let currentSemester = null;
+    let draggedUnit = null;
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        setupEventListeners();
+    });
+
+    function setupEventListeners() {
+        // Load timetable button
+        document.getElementById('loadTimetable').addEventListener('click', loadTimetable);
+
+        // Make cells droppable
+        setupDropZones();
+    }
+
+    function loadTimetable() {
+        const semester = document.getElementById('semester').value;
+        const programme = document.getElementById('programme').value;
+        const yearLevel = document.getElementById('yearLevel').value;
+
+        if (!semester || !programme || !yearLevel) {
+            showAlert('Please select semester, programme, and year level', 'danger');
+            return;
+        }
+
+        currentSemester = semester;
+        currentProgramme = programme;
+        currentYearLevel = yearLevel;
+
+        // Load units
+        loadUnits(programme, yearLevel);
+
+        // Load existing timetable
+        loadExistingTimetable(programme, yearLevel, semester);
+    }
+
+    function loadUnits(programmeId, yearLevel) {
+        fetch(`/admin-timetable/get-units/${programmeId}/${yearLevel}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayUnits(data.units);
+                } else {
+                    showAlert(data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                showAlert('Error loading units: ' + error, 'danger');
+            });
+    }
+
+    function displayUnits(units) {
+        const unitsList = document.getElementById('unitsList');
+        if (units.length === 0) {
+            unitsList.innerHTML = '<p style="color: #64748B; text-align: center; padding: 20px;">No units available for this selection</p>';
+            return;
+        }
+
+        unitsList.innerHTML = units.map(unit => `
+            <div class="unit-item" draggable="true" 
+                 data-unit-id="${unit.id}"
+                 data-unit-code="${unit.code}"
+                 data-unit-name="${unit.name}"
+                 ondragstart="handleDragStart(event)">
+                <div class="unit-info">
+                    <div class="unit-code">${unit.code}</div>
+                    <div class="unit-name">${unit.name}</div>
+                </div>
+                <div class="unit-credits">${unit.credit_hours} Credits</div>
+            </div>
+        `).join('');
+    }
+
+    function loadExistingTimetable(programmeId, yearLevel, semesterId) {
+        document.getElementById('loadingSpinner').classList.add('show');
+        
+        // Clear existing timetable
+        document.querySelectorAll('.timetable-cell').forEach(cell => {
+            cell.innerHTML = '';
+        });
+
+        fetch(`/admin-timetable/get-existing/${programmeId}/${yearLevel}/${semesterId}/`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loadingSpinner').classList.remove('show');
+                if (data.success) {
+                    displayExistingSlots(data.slots);
+                } else {
+                    showAlert(data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                document.getElementById('loadingSpinner').classList.remove('show');
+                showAlert('Error loading timetable: ' + error, 'danger');
+            });
+    }
+
+    function displayExistingSlots(slots) {
+        slots.forEach(slot => {
+            const cell = document.querySelector(
+                `.timetable-cell[data-day="${slot.day_of_week}"][data-start="${slot.start_time}"]`
+            );
+            
+            if (cell) {
+                cell.innerHTML = `
+                    <div class="scheduled-class" data-slot-id="${slot.id}">
+                        <button class="delete-btn" onclick="deleteSlot(${slot.id}, event)">
+                            <i class="bi bi-x"></i>
+                        </button>
+                        <div class="class-code">${slot.unit_code}</div>
+                        <div class="class-details"><i class="bi bi-person"></i> ${slot.lecturer_name}</div>
+                        <div class="class-details"><i class="bi bi-geo-alt"></i> ${slot.venue_code}</div>
+                    </div>
+                `;
+            }
+        });
+    }
+
+    function setupDropZones() {
+        const cells = document.querySelectorAll('.timetable-cell');
+        
+        cells.forEach(cell => {
+            cell.addEventListener('dragover', handleDragOver);
+            cell.addEventListener('drop', handleDrop);
+            cell.addEventListener('dragleave', handleDragLeave);
+        });
+    }
+
+    function handleDragStart(event) {
+        draggedUnit = {
+            id: event.target.dataset.unitId,
+            code: event.target.dataset.unitCode,
+            name: event.target.dataset.unitName
+        };
+        event.target.classList.add('dragging');
+    }
+
+    function handleDragOver(event) {
+        event.preventDefault();
+        if (!this.querySelector('.scheduled-class')) {
+            this.classList.add('drop-target');
+        }
+    }
+
+    function handleDragLeave(event) {
+        this.classList.remove('drop-target');
+    }
+
+    function handleDrop(event) {
+        event.preventDefault();
+        this.classList.remove('drop-target');
+        
+        if (this.querySelector('.scheduled-class')) {
+            showAlert('This time slot is already occupied', 'danger');
+            return;
+        }
+
+        if (!draggedUnit) return;
+
+        // Open modal to select lecturer and venue
+        openModal(
+            draggedUnit,
+            this.dataset.day,
+            this.dataset.start,
+            this.dataset.end
+        );
+
+        // Remove dragging class
+        document.querySelectorAll('.unit-item').forEach(item => {
+            item.classList.remove('dragging');
+        });
+    }
+
+    function openModal(unit, day, startTime, endTime) {
+        document.getElementById('modalUnitId').value = unit.id;
+        document.getElementById('modalUnitName').value = `${unit.code} - ${unit.name}`;
+        document.getElementById('modalDay').value = day;
+        document.getElementById('modalStartTime').value = startTime;
+        document.getElementById('modalEndTime').value = endTime;
+        document.getElementById('modalTimeSlot').value = `${day} ${startTime} - ${endTime}`;
+        document.getElementById('modalTitle').textContent = 'Schedule Class';
+        
+        // Reset selections
+        document.getElementById('modalLecturer').value = '';
+        document.getElementById('modalVenue').value = '';
+        
+        document.getElementById('classModal').classList.add('show');
+    }
+
+    function closeModal() {
+        document.getElementById('classModal').classList.remove('show');
+    }
+
+    function saveClass() {
+        const unitId = document.getElementById('modalUnitId').value;
+        const lecturerId = document.getElementById('modalLecturer').value;
+        const venueId = document.getElementById('modalVenue').value;
+        const day = document.getElementById('modalDay').value;
+        const startTime = document.getElementById('modalStartTime').value;
+        const endTime = document.getElementById('modalEndTime').value;
+
+        if (!lecturerId || !venueId) {
+            showAlert('Please select both lecturer and venue', 'danger');
+            return;
+        }
+
+        const data = {
+            unit_id: unitId,
+            lecturer_id: lecturerId,
+            venue_id: venueId,
+            programme_id: currentProgramme,
+            year_level: currentYearLevel,
+            semester_id: currentSemester,
+            day_of_week: day,
+            start_time: startTime,
+            end_time: endTime
+        };
+
+        fetch('/admin-timetable/save-slot/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                closeModal();
+                loadExistingTimetable(currentProgramme, currentYearLevel, currentSemester);
+            } else {
+                showAlert(data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Error saving slot: ' + error, 'danger');
+        });
+    }
+
+    function deleteSlot(slotId, event) {
+        event.stopPropagation();
+        
+        if (!confirm('Are you sure you want to delete this timetable slot?')) {
+            return;
+        }
+
+        fetch(`/admin-timetable/delete-slot/${slotId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                loadExistingTimetable(currentProgramme, currentYearLevel, currentSemester);
+            } else {
+                showAlert(data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Error deleting slot: ' + error, 'danger');
+        });
+    }
+
+    function showAlert(message, type) {
+        const alertContainer = document.getElementById('alertContainer');
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type}`;
+        alertDiv.innerHTML = `
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'}"></i>
+            ${message}
+        `;
+        alertContainer.appendChild(alertDiv);
+
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 5000);
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('classModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    }
+</script>
+{% endblock %}
