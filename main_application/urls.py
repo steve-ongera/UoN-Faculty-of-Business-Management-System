@@ -116,5 +116,15 @@ urlpatterns = [
     path('api/users/<int:user_id>/delete/', views.delete_user, name='delete_user'),
     path('api/departments/<int:department_id>/programmes/', views.get_programmes_by_department, name='get_programmes_by_department'),
     path('create_user_view/', views.create_user_view , name='create_user'),
+
+    # Main security dashboard
+    path('security-dashboard/', views.security_dashboard, name='security_dashboard'),
+    path('realtime-metrics/', views.get_realtime_metrics, name='get_realtime_metrics'),
+    path('login-activity-chart/', views.get_login_activity_chart, name='get_login_activity_chart'),
+    path('user-activity-chart/', views.get_user_activity_chart, name='get_user_activity_chart'),
+    path('security-events-chart/', views.get_security_events_chart, name='get_security_events_chart'),
+    path('toggle-maintenance/', views.toggle_maintenance_mode, name='toggle_maintenance_mode'),
+    path('update-security-settings/', views.update_security_settings, name='update_security_settings'),
+    path('audit-logs/', views.get_audit_logs, name='get_audit_logs'),
 ]
 

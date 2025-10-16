@@ -615,80 +615,46 @@
 
     // Initialize charts
     function initCharts() {
-        // Login Activity Chart
         const loginCtx = document.getElementById('loginChart').getContext('2d');
         loginChart = new Chart(loginCtx, {
             type: 'line',
-            data: {
-                labels: [],
-                datasets: []
-            },
+            data: { labels: [], datasets: [] },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
+                plugins: { legend: { display: true, position: 'top' } },
+                scales: { y: { beginAtZero: true } }
             }
         });
 
-        // User Activity Chart
         const userCtx = document.getElementById('userActivityChart').getContext('2d');
         userActivityChart = new Chart(userCtx, {
             type: 'doughnut',
-            data: {
-                labels: [],
-                datasets: []
-            },
+            data: { labels: [], datasets: [] },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom'
-                    }
-                }
+                plugins: { legend: { display: true, position: 'bottom' } }
             }
         });
 
-        // Security Events Chart
         const securityCtx = document.getElementById('securityEventsChart').getContext('2d');
         securityEventsChart = new Chart(securityCtx, {
             type: 'bar',
-            data: {
-                labels: [],
-                datasets: []
-            },
+            data: { labels: [], datasets: [] },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
             }
         });
     }
 
     // Load chart data
     function loadCharts() {
-        // Load login activity
-        fetch('/admin/security/charts/login-activity/')
+        // Login Activity Chart
+        fetch('/login-activity-chart/')
             .then(response => response.json())
             .then(data => {
                 loginChart.data.labels = data.labels;
@@ -696,8 +662,8 @@
                 loginChart.update();
             });
 
-        // Load user activity
-        fetch('/admin/security/charts/user-activity/')
+        // User Activity Chart
+        fetch('/user-activity-chart/')
             .then(response => response.json())
             .then(data => {
                 userActivityChart.data.labels = data.labels;
@@ -705,8 +671,8 @@
                 userActivityChart.update();
             });
 
-        // Load security events
-        fetch('/admin/security/charts/security-events/')
+        // Security Events Chart
+        fetch('/security-events-chart/')
             .then(response => response.json())
             .then(data => {
                 securityEventsChart.data.labels = data.labels;
@@ -717,21 +683,17 @@
 
     // Load real-time metrics
     function loadRealtimeMetrics() {
-        fetch('/admin/security/realtime-metrics/')
+        fetch('/realtime-metrics/')
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     document.getElementById('active-sessions').textContent = data.metrics.active_users;
                     document.getElementById('failed-logins').textContent = data.metrics.failed_logins_hour;
                     document.getElementById('security-events').textContent = data.metrics.security_events_hour;
-                    
-                    // Update last update time
                     document.getElementById('last-update').textContent = 'Just now';
                     
-                    // Update audit logs table
                     const tbody = document.getElementById('audit-logs-body');
                     tbody.innerHTML = '';
-                    
                     data.recent_audits.forEach(audit => {
                         const row = document.createElement('tr');
                         row.innerHTML = `
@@ -749,12 +711,12 @@
             });
     }
 
-    // Maintenance mode toggle
+    // Toggle Maintenance Mode
     document.getElementById('maintenance-toggle').addEventListener('click', function() {
         const isActive = this.classList.contains('active');
         const message = document.getElementById('maintenance-message').value;
         
-        fetch('/admin/security/toggle-maintenance/', {
+        fetch('/toggle-maintenance/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -773,7 +735,7 @@
         });
     });
 
-    // Save settings
+    // Update Security Settings
     document.getElementById('save-settings').addEventListener('click', function() {
         const settings = {
             max_login_attempts: document.getElementById('max-login-attempts').value,
@@ -783,7 +745,7 @@
             log_view_actions: document.getElementById('log-view-actions').checked
         };
         
-        fetch('/admin/security/update-settings/', {
+        fetch('/update-security-settings/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -799,17 +761,13 @@
         });
     });
 
-    // Initialize on page load
+    // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         initCharts();
         loadCharts();
         loadRealtimeMetrics();
-        
-        // Refresh real-time metrics every 10 seconds
-        setInterval(loadRealtimeMetrics, 10000);
-        
-        // Refresh charts every 30 seconds
-        setInterval(loadCharts, 30000);
+        setInterval(loadRealtimeMetrics, 10000);  // every 10s
+        setInterval(loadCharts, 30000);           // every 30s
     });
 </script>
 {% endblock %}
