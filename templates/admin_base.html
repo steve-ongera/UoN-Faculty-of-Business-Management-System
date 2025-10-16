@@ -623,7 +623,7 @@
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-timetable">
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'view_timetable' %}active{% endif %}">View Timetable</a>
+                <a href="{% url 'timetable_view'%}" class="submenu-item {% if request.resolver_match.url_name == 'timetable_view' %}active{% endif %}">View Timetable</a>
                 <a href="{% url 'timetable_create'%}" class="submenu-item {% if request.resolver_match.url_name == 'timetable_create' %}active{% endif %}">Create Timetable</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'venues' %}active{% endif %}">Venues</a>
             </div>

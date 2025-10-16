@@ -5286,3 +5286,301 @@ def update_timetable_slot(request, slot_id):
             'success': False,
             'error': str(e)
         }, status=400)
+
+
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.http import require_http_methods
+from django.db.models import Q
+from .models import (
+    Programme, Semester, Unit, UnitAllocation, Lecturer, Venue,
+    TimetableSlot, Department, ProgrammeUnit
+)
+import json
+from datetime import datetime, time
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+
+
+@login_required
+def timetable_view(request):
+    """
+    View timetable for selected programme, semester, and year
+    """
+    # Get current semester or all semesters
+    current_semester = Semester.objects.filter(is_current=True).first()
+    semesters = Semester.objects.all().order_by('-start_date')[:10]
+    
+    # Get all active programmes grouped by department
+    programmes = Programme.objects.filter(is_active=True).select_related('department').order_by('department', 'name')
+    
+    # Time slots configuration (8 AM to 6 PM)
+    time_slots = [
+        {'start': '08:00', 'end': '09:00', 'label': '08:00 - 09:00'},
+        {'start': '09:00', 'end': '10:00', 'label': '09:00 - 10:00'},
+        {'start': '10:00', 'end': '11:00', 'label': '10:00 - 11:00'},
+        {'start': '11:00', 'end': '12:00', 'label': '11:00 - 12:00'},
+        {'start': '12:00', 'end': '13:00', 'label': '12:00 - 13:00'},
+        {'start': '13:00', 'end': '14:00', 'label': '13:00 - 14:00'},
+        {'start': '14:00', 'end': '15:00', 'label': '14:00 - 15:00'},
+        {'start': '15:00', 'end': '16:00', 'label': '15:00 - 16:00'},
+        {'start': '16:00', 'end': '17:00', 'label': '16:00 - 17:00'},
+        {'start': '17:00', 'end': '18:00', 'label': '17:00 - 18:00'},
+    ]
+    
+    # Days of the week
+    days_of_week = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    
+    context = {
+        'current_semester': current_semester,
+        'semesters': semesters,
+        'programmes': programmes,
+        'time_slots': time_slots,
+        'days_of_week': days_of_week,
+        'year_levels': [1, 2, 3, 4],
+    }
+    
+    return render(request, 'admin/timetable_view.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_timetable_data(request, programme_id, year_level, semester_id):
+    """
+    Get timetable data for viewing
+    """
+    try:
+        programme = get_object_or_404(Programme, id=programme_id)
+        semester = get_object_or_404(Semester, id=semester_id)
+        
+        # Get timetable slots
+        timetable_slots = TimetableSlot.objects.filter(
+            programme_id=programme_id,
+            year_level=year_level,
+            unit_allocation__semester_id=semester_id,
+            is_active=True
+        ).select_related(
+            'unit_allocation__unit',
+            'unit_allocation__lecturer__user',
+            'venue'
+        ).order_by('day_of_week', 'start_time')
+        
+        # Time slots for the grid
+        time_slots = [
+            {'start': '08:00', 'end': '09:00'},
+            {'start': '09:00', 'end': '10:00'},
+            {'start': '10:00', 'end': '11:00'},
+            {'start': '11:00', 'end': '12:00'},
+            {'start': '12:00', 'end': '13:00'},
+            {'start': '13:00', 'end': '14:00'},
+            {'start': '14:00', 'end': '15:00'},
+            {'start': '15:00', 'end': '16:00'},
+            {'start': '16:00', 'end': '17:00'},
+            {'start': '17:00', 'end': '18:00'},
+        ]
+        
+        days_of_week = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+        
+        # Create timetable grid
+        timetable_grid = {}
+        for day in days_of_week:
+            timetable_grid[day] = {}
+            for slot in time_slots:
+                timetable_grid[day][slot['start']] = None
+        
+        # Fill in the scheduled classes
+        for slot in timetable_slots:
+            start_time = slot.start_time.strftime('%H:%M')
+            if slot.day_of_week in timetable_grid and start_time in timetable_grid[slot.day_of_week]:
+                timetable_grid[slot.day_of_week][start_time] = {
+                    'unit_code': slot.unit_allocation.unit.code,
+                    'unit_name': slot.unit_allocation.unit.name,
+                    'lecturer_name': slot.unit_allocation.lecturer.user.get_full_name(),
+                    'venue_code': slot.venue.code,
+                    'venue_name': slot.venue.name,
+                    'start_time': start_time,
+                    'end_time': slot.end_time.strftime('%H:%M'),
+                }
+        
+        return JsonResponse({
+            'success': True,
+            'timetable': timetable_grid,
+            'programme': {
+                'code': programme.code,
+                'name': programme.name,
+            },
+            'semester': str(semester),
+            'year_level': year_level,
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+def export_timetable_excel(request):
+    """
+    Export timetable to Excel format
+    """
+    try:
+        programme_id = request.GET.get('programme_id')
+        year_level = request.GET.get('year_level')
+        semester_id = request.GET.get('semester_id')
+        
+        if not all([programme_id, year_level, semester_id]):
+            return HttpResponse('Missing parameters', status=400)
+        
+        programme = get_object_or_404(Programme, id=programme_id)
+        semester = get_object_or_404(Semester, id=semester_id)
+        
+        # Get timetable slots
+        timetable_slots = TimetableSlot.objects.filter(
+            programme_id=programme_id,
+            year_level=year_level,
+            unit_allocation__semester_id=semester_id,
+            is_active=True
+        ).select_related(
+            'unit_allocation__unit',
+            'unit_allocation__lecturer__user',
+            'venue'
+        ).order_by('day_of_week', 'start_time')
+        
+        # Create workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Timetable"
+        
+        # Define styles
+        header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        day_fill = PatternFill(start_color="667EEA", end_color="667EEA", fill_type="solid")
+        day_font = Font(bold=True, color="FFFFFF", size=11)
+        time_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+        time_font = Font(bold=True, size=10)
+        cell_border = Border(
+            left=Side(style='thin', color='E2E8F0'),
+            right=Side(style='thin', color='E2E8F0'),
+            top=Side(style='thin', color='E2E8F0'),
+            bottom=Side(style='thin', color='E2E8F0')
+        )
+        
+        # Title Section
+        ws.merge_cells('A1:H1')
+        title_cell = ws['A1']
+        title_cell.value = "FACULTY OF BUSINESS - TIMETABLE"
+        title_cell.font = Font(bold=True, size=16, color="1E293B")
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Programme Info
+        ws.merge_cells('A2:H2')
+        prog_cell = ws['A2']
+        prog_cell.value = f"Programme: {programme.code} - {programme.name}"
+        prog_cell.font = Font(bold=True, size=12, color="475569")
+        prog_cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Semester and Year Info
+        ws.merge_cells('A3:H3')
+        sem_cell = ws['A3']
+        sem_cell.value = f"Semester: {semester} | Year: {year_level}"
+        sem_cell.font = Font(bold=True, size=11, color="475569")
+        sem_cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Add spacing
+        ws.row_dimensions[4].height = 5
+        
+        # Time slots
+        time_slots = [
+            '08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00',
+            '12:00 - 13:00', '13:00 - 14:00', '14:00 - 15:00', '15:00 - 16:00',
+            '16:00 - 17:00', '17:00 - 18:00'
+        ]
+        
+        days_of_week = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+        
+        # Create timetable grid dictionary
+        timetable_grid = {}
+        for day in days_of_week:
+            timetable_grid[day] = {}
+            for slot in time_slots:
+                timetable_grid[day][slot] = None
+        
+        # Fill in the scheduled classes
+        for slot in timetable_slots:
+            start_time = slot.start_time.strftime('%H:%M')
+            end_time = slot.end_time.strftime('%H:%M')
+            time_label = f"{start_time} - {end_time}"
+            
+            if slot.day_of_week in timetable_grid and time_label in timetable_grid[slot.day_of_week]:
+                timetable_grid[slot.day_of_week][time_label] = {
+                    'unit_code': slot.unit_allocation.unit.code,
+                    'unit_name': slot.unit_allocation.unit.name,
+                    'lecturer': slot.unit_allocation.lecturer.user.get_full_name(),
+                    'venue': slot.venue.code,
+                }
+        
+        # Header row (Days)
+        start_row = 5
+        ws.cell(row=start_row, column=1, value="Time")
+        ws.cell(row=start_row, column=1).fill = header_fill
+        ws.cell(row=start_row, column=1).font = header_font
+        ws.cell(row=start_row, column=1).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=start_row, column=1).border = cell_border
+        
+        for col_idx, day in enumerate(days_of_week, start=2):
+            cell = ws.cell(row=start_row, column=col_idx, value=day.title())
+            cell.fill = day_fill
+            cell.font = day_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = cell_border
+        
+        # Fill timetable data
+        current_row = start_row + 1
+        for time_slot in time_slots:
+            # Time column
+            time_cell = ws.cell(row=current_row, column=1, value=time_slot)
+            time_cell.fill = time_fill
+            time_cell.font = time_font
+            time_cell.alignment = Alignment(horizontal='center', vertical='center')
+            time_cell.border = cell_border
+            
+            # Day columns
+            for col_idx, day in enumerate(days_of_week, start=2):
+                cell = ws.cell(row=current_row, column=col_idx)
+                cell.border = cell_border
+                
+                class_info = timetable_grid[day].get(time_slot)
+                if class_info:
+                    cell_value = f"{class_info['unit_code']}\n{class_info['unit_name']}\n{class_info['lecturer']}\n{class_info['venue']}"
+                    cell.value = cell_value
+                    cell.font = Font(size=9)
+                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                    cell.fill = PatternFill(start_color="EEF2FF", end_color="EEF2FF", fill_type="solid")
+                else:
+                    cell.value = ""
+            
+            ws.row_dimensions[current_row].height = 60
+            current_row += 1
+        
+        # Set column widths
+        ws.column_dimensions['A'].width = 15
+        for col in range(2, 8):
+            ws.column_dimensions[get_column_letter(col)].width = 25
+        
+        # Prepare response
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f"Timetable_{programme.code}_Year{year_level}_{semester.academic_year.year_code}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        wb.save(response)
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f'Error generating Excel: {str(e)}', status=400)

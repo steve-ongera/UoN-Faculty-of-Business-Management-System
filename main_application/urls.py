@@ -101,4 +101,9 @@ urlpatterns = [
     path('admin-timetable/delete-slot/<int:slot_id>/', views.delete_timetable_slot, name='delete_timetable_slot'),
     path('admin-timetable/update-slot/<int:slot_id>/', views.update_timetable_slot, name='update_timetable_slot'),
 
+    # Timetable Viewing & Export
+    path('admin-timetable/view/', views.timetable_view, name='timetable_view'),
+    path('admin-timetable/get-data/<int:programme_id>/<int:year_level>/<int:semester_id>/', views.get_timetable_data, name='get_timetable_data'),
+    path('admin-timetable/export-excel/', views.export_timetable_excel, name='export_timetable_excel'),
 ]
+
