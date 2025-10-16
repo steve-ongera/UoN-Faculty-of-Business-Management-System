@@ -1,0 +1,815 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Security Dashboard{% endblock %}
+
+{% block page_title %}Security & Audit Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 5px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+        border: 1px solid #f0f0f0;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #F1F5F9;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 5px;
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stat-card.green {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    }
+
+    .stat-card.red {
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    }
+
+    .stat-card.orange {
+        background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+    }
+
+    .stat-card.blue {
+        background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    }
+
+    .stat-card.purple {
+        background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+    }
+
+    .stat-icon {
+        position: absolute;
+        right: 20px;
+        top: 20px;
+        font-size: 40px;
+        opacity: 0.3;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        opacity: 0.9;
+        margin-bottom: 8px;
+    }
+
+    .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+    }
+
+    .stat-change {
+        font-size: 12px;
+        margin-top: 5px;
+        opacity: 0.9;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-top: 20px;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+    }
+
+    .btn-danger {
+        background: #EF4444;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #DC2626;
+    }
+
+    .btn-success {
+        background: #10B981;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #059669;
+    }
+
+    .btn-warning {
+        background: #F59E0B;
+        color: white;
+    }
+
+    .btn-warning:hover {
+        background: #D97706;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-critical {
+        background: #FEE2E2;
+        color: #991B1B;
+    }
+
+    .badge-high {
+        background: #FED7AA;
+        color: #9A3412;
+    }
+
+    .badge-medium {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+
+    .badge-low {
+        background: #D1FAE5;
+        color: #065F46;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        margin-top: 15px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    thead {
+        background: #F8FAFC;
+    }
+
+    th {
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        color: #475569;
+        border-bottom: 2px solid #E2E8F0;
+    }
+
+    td {
+        padding: 12px;
+        border-bottom: 1px solid #F1F5F9;
+        color: #1E293B;
+    }
+
+    tbody tr:hover {
+        background: #F8FAFC;
+    }
+
+    .maintenance-toggle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        background: #FEF3C7;
+        border: 2px solid #FDE68A;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+
+    .maintenance-toggle.active {
+        background: #FEE2E2;
+        border-color: #FECACA;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 60px;
+        height: 30px;
+        background: #CBD5E1;
+        border-radius: 15px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    .toggle-switch.active {
+        background: #EF4444;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 24px;
+        height: 24px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s;
+    }
+
+    .toggle-switch.active .toggle-slider {
+        transform: translateX(30px);
+    }
+
+    .filter-bar {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #F8FAFC;
+        border-radius: 5px;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .filter-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748B;
+    }
+
+    .filter-group select,
+    .filter-group input {
+        padding: 8px 12px;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        font-size: 14px;
+    }
+
+    .realtime-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 15px;
+        background: #ECFDF5;
+        border: 1px solid #A7F3D0;
+        border-radius: 20px;
+        font-size: 13px;
+        color: #065F46;
+    }
+
+    .pulse-dot {
+        width: 8px;
+        height: 8px;
+        background: #10B981;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
+    }
+
+    .alert {
+        padding: 15px 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .alert-warning {
+        background: #FEF3C7;
+        border: 1px solid #FDE68A;
+        color: #92400E;
+    }
+
+    .alert-danger {
+        background: #FEE2E2;
+        border: 1px solid #FECACA;
+        color: #991B1B;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .filter-bar {
+            flex-direction: column;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Security & Audit</li>
+    </ol>
+</nav>
+
+<!-- Realtime Indicator -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h2 style="margin: 0; color: #1E293B;">Security Monitoring</h2>
+    <div class="realtime-indicator">
+        <span class="pulse-dot"></span>
+        <span>Live Updates</span>
+        <span id="last-update" style="color: #64748B;">Just now</span>
+    </div>
+</div>
+
+<!-- Maintenance Mode Alert -->
+{% if settings.maintenance_mode %}
+<div class="alert alert-danger">
+    <i class="bi bi-exclamation-triangle" style="font-size: 24px;"></i>
+    <div>
+        <strong>Maintenance Mode Active</strong>
+        <p style="margin: 5px 0 0 0; font-size: 13px;">System is currently in maintenance mode. Regular users cannot access the system.</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Critical Events Alert -->
+{% if critical_events > 0 %}
+<div class="alert alert-danger">
+    <i class="bi bi-shield-exclamation" style="font-size: 24px;"></i>
+    <div>
+        <strong>Critical Security Events</strong>
+        <p style="margin: 5px 0 0 0; font-size: 13px;">There are {{ critical_events }} unresolved critical security event(s) requiring immediate attention.</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Key Metrics -->
+<div class="stats-grid">
+    <div class="stat-card purple">
+        <div class="stat-icon"><i class="bi bi-people"></i></div>
+        <div class="stat-label">Total Users</div>
+        <div class="stat-value" id="total-users">{{ total_users }}</div>
+    </div>
+
+    <div class="stat-card green">
+        <div class="stat-icon"><i class="bi bi-activity"></i></div>
+        <div class="stat-label">Active Sessions</div>
+        <div class="stat-value" id="active-sessions">{{ active_sessions }}</div>
+        <div class="stat-change">Real-time active users</div>
+    </div>
+
+    <div class="stat-card red">
+        <div class="stat-icon"><i class="bi bi-x-circle"></i></div>
+        <div class="stat-label">Failed Logins Today</div>
+        <div class="stat-value" id="failed-logins">{{ failed_logins_today }}</div>
+        <div class="stat-change">Last 24 hours</div>
+    </div>
+
+    <div class="stat-card orange">
+        <div class="stat-icon"><i class="bi bi-shield-exclamation"></i></div>
+        <div class="stat-label">Security Events Today</div>
+        <div class="stat-value" id="security-events">{{ security_events_today }}</div>
+        <div class="stat-change">Detected incidents</div>
+    </div>
+
+    <div class="stat-card blue">
+        <div class="stat-icon"><i class="bi bi-ban"></i></div>
+        <div class="stat-label">Blocked IPs</div>
+        <div class="stat-value">{{ blocked_ips }}</div>
+        <div class="stat-change">Currently active</div>
+    </div>
+
+    <div class="stat-card red">
+        <div class="stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
+        <div class="stat-label">Critical Events</div>
+        <div class="stat-value">{{ critical_events }}</div>
+        <div class="stat-change">Unresolved</div>
+    </div>
+</div>
+
+<!-- Maintenance Mode Toggle -->
+<div class="section-container">
+    <h3 class="section-title">
+        <i class="bi bi-tools"></i>
+        Maintenance Mode
+    </h3>
+    <div class="maintenance-toggle {% if settings.maintenance_mode %}active{% endif %}">
+        <div>
+            <strong>System Maintenance</strong>
+            <p style="margin: 5px 0 0 0; font-size: 13px; color: #64748B;">
+                {% if settings.maintenance_mode %}
+                    Maintenance mode is currently active. Users cannot access the system.
+                {% else %}
+                    Enable maintenance mode to prevent user access during system updates.
+                {% endif %}
+            </p>
+        </div>
+        <div class="toggle-switch {% if settings.maintenance_mode %}active{% endif %}" id="maintenance-toggle">
+            <div class="toggle-slider"></div>
+        </div>
+    </div>
+    <div style="margin-top: 15px;">
+        <label style="display: block; font-size: 13px; font-weight: 600; color: #64748B; margin-bottom: 5px;">Maintenance Message</label>
+        <textarea id="maintenance-message" rows="3" style="width: 100%; padding: 10px; border: 1px solid #E2E8F0; border-radius: 5px; font-size: 14px;">{{ settings.maintenance_message }}</textarea>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-bottom: 20px;">
+    <!-- Login Activity Chart -->
+    <div class="section-container">
+        <h3 class="section-title">
+            <i class="bi bi-graph-up"></i>
+            Login Activity (Last 7 Days)
+        </h3>
+        <div class="chart-container">
+            <canvas id="loginChart"></canvas>
+        </div>
+    </div>
+
+    <!-- User Activity Chart -->
+    <div class="section-container">
+        <h3 class="section-title">
+            <i class="bi bi-pie-chart"></i>
+            Activity by User Type
+        </h3>
+        <div class="chart-container">
+            <canvas id="userActivityChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Security Events Chart -->
+<div class="section-container">
+    <h3 class="section-title">
+        <i class="bi bi-shield"></i>
+        Security Events by Risk Level
+    </h3>
+    <div class="chart-container">
+        <canvas id="securityEventsChart"></canvas>
+    </div>
+</div>
+
+<!-- Recent Audit Logs -->
+<div class="section-container">
+    <h3 class="section-title">
+        <i class="bi bi-journal-text"></i>
+        Recent Audit Logs
+    </h3>
+    <div class="table-container">
+        <table id="audit-logs-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>User Type</th>
+                    <th>Action</th>
+                    <th>Description</th>
+                    <th>IP Address</th>
+                    <th>Severity</th>
+                </tr>
+            </thead>
+            <tbody id="audit-logs-body">
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 40px; color: #64748B;">
+                        <i class="bi bi-hourglass-split" style="font-size: 24px; display: block; margin-bottom: 10px;"></i>
+                        Loading audit logs...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Security Settings -->
+<div class="section-container">
+    <h3 class="section-title">
+        <i class="bi bi-gear"></i>
+        Security Settings
+    </h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: #64748B; margin-bottom: 5px;">Max Login Attempts</label>
+            <input type="number" id="max-login-attempts" value="{{ settings.max_login_attempts }}" style="width: 100%; padding: 10px; border: 1px solid #E2E8F0; border-radius: 5px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: #64748B; margin-bottom: 5px;">Lockout Duration (minutes)</label>
+            <input type="number" id="lockout-duration" value="{{ settings.lockout_duration_minutes }}" style="width: 100%; padding: 10px; border: 1px solid #E2E8F0; border-radius: 5px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: #64748B; margin-bottom: 5px;">Session Timeout (minutes)</label>
+            <input type="number" id="session-timeout" value="{{ settings.session_timeout_minutes }}" style="width: 100%; padding: 10px; border: 1px solid #E2E8F0; border-radius: 5px;">
+        </div>
+    </div>
+    <div style="margin-top: 15px; display: flex; gap: 15px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="enable-audit-logging" {% if settings.enable_audit_logging %}checked{% endif %}>
+            <span style="font-size: 14px; color: #1E293B;">Enable Audit Logging</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="log-view-actions" {% if settings.log_view_actions %}checked{% endif %}>
+            <span style="font-size: 14px; color: #1E293B;">Log View Actions</span>
+        </label>
+    </div>
+    <div class="action-buttons">
+        <button class="btn btn-primary" id="save-settings">
+            <i class="bi bi-save"></i> Save Settings
+        </button>
+        <button class="btn btn-warning" id="reset-settings">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset to Defaults
+        </button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    let loginChart, userActivityChart, securityEventsChart;
+
+    // Initialize charts
+    function initCharts() {
+        // Login Activity Chart
+        const loginCtx = document.getElementById('loginChart').getContext('2d');
+        loginChart = new Chart(loginCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: []
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // User Activity Chart
+        const userCtx = document.getElementById('userActivityChart').getContext('2d');
+        userActivityChart = new Chart(userCtx, {
+            type: 'doughnut',
+            data: {
+                labels: [],
+                datasets: []
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        // Security Events Chart
+        const securityCtx = document.getElementById('securityEventsChart').getContext('2d');
+        securityEventsChart = new Chart(securityCtx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: []
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    // Load chart data
+    function loadCharts() {
+        // Load login activity
+        fetch('/admin/security/charts/login-activity/')
+            .then(response => response.json())
+            .then(data => {
+                loginChart.data.labels = data.labels;
+                loginChart.data.datasets = data.datasets;
+                loginChart.update();
+            });
+
+        // Load user activity
+        fetch('/admin/security/charts/user-activity/')
+            .then(response => response.json())
+            .then(data => {
+                userActivityChart.data.labels = data.labels;
+                userActivityChart.data.datasets = data.datasets;
+                userActivityChart.update();
+            });
+
+        // Load security events
+        fetch('/admin/security/charts/security-events/')
+            .then(response => response.json())
+            .then(data => {
+                securityEventsChart.data.labels = data.labels;
+                securityEventsChart.data.datasets = data.datasets;
+                securityEventsChart.update();
+            });
+    }
+
+    // Load real-time metrics
+    function loadRealtimeMetrics() {
+        fetch('/admin/security/realtime-metrics/')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('active-sessions').textContent = data.metrics.active_users;
+                    document.getElementById('failed-logins').textContent = data.metrics.failed_logins_hour;
+                    document.getElementById('security-events').textContent = data.metrics.security_events_hour;
+                    
+                    // Update last update time
+                    document.getElementById('last-update').textContent = 'Just now';
+                    
+                    // Update audit logs table
+                    const tbody = document.getElementById('audit-logs-body');
+                    tbody.innerHTML = '';
+                    
+                    data.recent_audits.forEach(audit => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${audit.timestamp}</td>
+                            <td>${audit.user}</td>
+                            <td>${audit.user_type}</td>
+                            <td>${audit.action}</td>
+                            <td>${audit.description}</td>
+                            <td>${audit.ip_address || '-'}</td>
+                            <td><span class="badge badge-${audit.severity.toLowerCase()}">${audit.severity}</span></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            });
+    }
+
+    // Maintenance mode toggle
+    document.getElementById('maintenance-toggle').addEventListener('click', function() {
+        const isActive = this.classList.contains('active');
+        const message = document.getElementById('maintenance-message').value;
+        
+        fetch('/admin/security/toggle-maintenance/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                enable: !isActive,
+                message: message
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        });
+    });
+
+    // Save settings
+    document.getElementById('save-settings').addEventListener('click', function() {
+        const settings = {
+            max_login_attempts: document.getElementById('max-login-attempts').value,
+            lockout_duration_minutes: document.getElementById('lockout-duration').value,
+            session_timeout_minutes: document.getElementById('session-timeout').value,
+            enable_audit_logging: document.getElementById('enable-audit-logging').checked,
+            log_view_actions: document.getElementById('log-view-actions').checked
+        };
+        
+        fetch('/admin/security/update-settings/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(settings)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Settings saved successfully!');
+            }
+        });
+    });
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        initCharts();
+        loadCharts();
+        loadRealtimeMetrics();
+        
+        // Refresh real-time metrics every 10 seconds
+        setInterval(loadRealtimeMetrics, 10000);
+        
+        // Refresh charts every 30 seconds
+        setInterval(loadCharts, 30000);
+    });
+</script>
+{% endblock %}
