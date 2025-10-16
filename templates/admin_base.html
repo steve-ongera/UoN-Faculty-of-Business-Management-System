@@ -643,13 +643,13 @@
         <div class="menu-section">
             <div class="menu-title">Communication</div>
             
-            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'admin_announcements' %}active{% endif %}">
+            <a href="{% url 'announcement_list'%}" class="menu-item {% if request.resolver_match.url_name == 'announcement_list' %}active{% endif %}">
                 <i class="fas fa-bullhorn"></i>
                 <span>Announcements</span>
                 <span class="badge">3</span>
             </a>
 
-            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'admin_events' %}active{% endif %}">
+            <a href="{% url 'event_list'%}" class="menu-item {% if request.resolver_match.url_name == 'event_list' %}active{% endif %}">
                 <i class="fas fa-calendar-check"></i>
                 <span>Events</span>
             </a>

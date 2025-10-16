@@ -77,5 +77,19 @@ urlpatterns = [
     path('programme/<str:programme_code>/add-unit/', views.programme_add_unit, name='programme_add_unit'),
     path('programme/unit/<int:programme_unit_id>/update/', views.programme_update_unit, name='programme_update_unit'),
     path('programme/unit/<int:programme_unit_id>/delete/', views.programme_delete_unit, name='programme_delete_unit'),
+
+    # Announcement URLs
+    path('announcements/', views.announcement_list, name='announcement_list'),
+    path('announcements/<int:pk>/', views.announcement_detail, name='announcement_detail'),
+    path('announcements/create/', views.announcement_create, name='announcement_create'),
+    path('announcements/<int:pk>/update/', views.announcement_update, name='announcement_update'),
+    path('announcements/<int:pk>/delete/', views.announcement_delete, name='announcement_delete'),
     
+    # Event URLs
+    path('admin-events/', views.event_list, name='event_list'),
+    path('admin-events/<int:pk>/', views.event_detail, name='event_detail'),
+    path('admin-events/create/', views.event_create, name='event_create'),
+    path('admin-events/<int:pk>/update/', views.event_update, name='event_update'),
+    path('admin-events/<int:pk>/delete/', views.event_delete, name='event_delete'),
+
 ]

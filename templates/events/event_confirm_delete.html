@@ -1,0 +1,228 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Delete Event{% endblock %}
+
+{% block page_title %}Delete Event{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .delete-container {
+        background: white;
+        border-radius: 5px;
+        padding: 40px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        border: 1px solid #f0f0f0;
+        max-width: 600px;
+        margin: 0 auto;
+        text-align: center;
+    }
+
+    .delete-icon {
+        width: 80px;
+        height: 80px;
+        background: #FEE2E2;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+    }
+
+    .delete-icon i {
+        font-size: 40px;
+        color: #EF4444;
+    }
+
+    .delete-container h2 {
+        font-size: 24px;
+        color: #1E293B;
+        margin-bottom: 15px;
+    }
+
+    .delete-container p {
+        font-size: 15px;
+        color: #64748B;
+        margin-bottom: 25px;
+        line-height: 1.6;
+    }
+
+    .event-info {
+        background: #F8FAFC;
+        padding: 20px;
+        border-radius: 5px;
+        border-left: 4px solid #EF4444;
+        text-align: left;
+        margin-bottom: 30px;
+    }
+
+    .event-info h3 {
+        font-size: 16px;
+        color: #1E293B;
+        margin: 0 0 10px 0;
+    }
+
+    .event-info p {
+        font-size: 14px;
+        color: #64748B;
+        margin: 5px 0;
+    }
+
+    .warning-box {
+        background: #FEF3C7;
+        padding: 15px;
+        border-radius: 5px;
+        border-left: 4px solid #F59E0B;
+        margin-bottom: 20px;
+        text-align: left;
+    }
+
+    .warning-box p {
+        color: #92400E;
+        font-size: 14px;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .btn {
+        padding: 12px 30px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+    }
+
+    .btn-danger {
+        background: #EF4444;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #DC2626;
+    }
+
+    .btn-secondary {
+        background: #64748B;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #475569;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+    }
+
+    @media (max-width: 768px) {
+        .delete-container {
+            padding: 30px 20px;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'event_list' %}">Events</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'event_detail' event.pk %}">{{ event.title|truncatewords:5 }}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Delete</li>
+    </ol>
+</nav>
+
+<!-- Delete Confirmation -->
+<div class="delete-container">
+    <div class="delete-icon">
+        <i class="bi bi-exclamation-triangle"></i>
+    </div>
+
+    <h2>Delete Event?</h2>
+    <p>Are you sure you want to delete this event? This action cannot be undone.</p>
+
+    {% if registration_count > 0 %}
+    <div class="warning-box">
+        <p>
+            <i class="bi bi-exclamation-triangle" style="font-size: 20px;"></i>
+            <strong>Warning:</strong> This event has {{ registration_count }} registration(s). Deleting it will also remove all registrations.
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="event-info">
+        <h3>{{ event.title }}</h3>
+        <p><strong>Type:</strong> {{ event.get_event_type_display }}</p>
+        <p><strong>Date:</strong> {{ event.event_date|date:"d M Y" }}</p>
+        <p><strong>Time:</strong> {{ event.start_time|time:"h:i A" }} - {{ event.end_time|time:"h:i A" }}</p>
+        <p><strong>Venue:</strong> {{ event.venue.name|default:"TBA" }}</p>
+        <p><strong>Registrations:</strong> {{ registration_count }}</p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Yes, Delete Event
+            </button>
+            <a href="{% url 'event_detail' event.pk %}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+        </div>
+    </form>
+</div>
+
+{% endblock %}

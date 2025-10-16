@@ -4222,3 +4222,495 @@ def programme_export_structure(request, programme_code):
         ])
     
     return response
+
+# views.py
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.db.models import Q, Count
+from django.utils import timezone
+from .models import (
+    Announcement, Event, EventRegistration, Programme, 
+    Venue, User, Student
+)
+from django.core.paginator import Paginator
+
+
+# ========================
+# ANNOUNCEMENT VIEWS
+# ========================
+
+@login_required
+def announcement_list(request):
+    """List all announcements with filters"""
+    announcements = Announcement.objects.select_related('created_by').prefetch_related('target_programmes')
+    
+    # Search filter
+    search_query = request.GET.get('search', '')
+    if search_query:
+        announcements = announcements.filter(
+            Q(title__icontains=search_query) | 
+            Q(content__icontains=search_query)
+        )
+    
+    # Priority filter
+    priority = request.GET.get('priority', '')
+    if priority:
+        announcements = announcements.filter(priority=priority)
+    
+    # Status filter
+    status = request.GET.get('status', '')
+    if status == 'published':
+        announcements = announcements.filter(is_published=True)
+    elif status == 'draft':
+        announcements = announcements.filter(is_published=False)
+    elif status == 'active':
+        announcements = announcements.filter(
+            is_published=True,
+            publish_date__lte=timezone.now()
+        ).filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=timezone.now()))
+    elif status == 'expired':
+        announcements = announcements.filter(
+            expiry_date__lt=timezone.now()
+        )
+    
+    # Order by
+    announcements = announcements.order_by('-publish_date')
+    
+    # Statistics
+    total_announcements = Announcement.objects.count()
+    active_announcements = Announcement.objects.filter(
+        is_published=True,
+        publish_date__lte=timezone.now()
+    ).filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=timezone.now())).count()
+    urgent_announcements = Announcement.objects.filter(priority='URGENT').count()
+    
+    # Pagination
+    paginator = Paginator(announcements, 15)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'announcements': page_obj,
+        'total_announcements': total_announcements,
+        'active_announcements': active_announcements,
+        'urgent_announcements': urgent_announcements,
+        'search_query': search_query,
+        'priority_filter': priority,
+        'status_filter': status,
+        'priority_choices': Announcement.PRIORITY_LEVELS,
+    }
+    return render(request, 'announcements/announcement_list.html', context)
+
+
+from django.utils import timezone
+@login_required
+def announcement_detail(request, pk):
+    """View announcement details"""
+    announcement = get_object_or_404(
+        Announcement.objects.select_related('created_by').prefetch_related('target_programmes'),
+        pk=pk
+    )
+    
+    # Get target programmes
+    target_programmes = announcement.target_programmes.all()
+    
+    # Parse target year levels
+    target_years = []
+    if announcement.target_year_levels:
+        target_years = [int(y) for y in announcement.target_year_levels.split(',') if y.strip()]
+    
+    # Calculate reach (estimated number of students)
+    if target_programmes.exists():
+        reach = Student.objects.filter(programme__in=target_programmes)
+        if target_years:
+            reach = reach.filter(current_year__in=target_years)
+        reach_count = reach.count()
+    else:
+        reach_count = Student.objects.filter(is_active=True).count()
+    
+    # Check if expired
+    is_expired = announcement.expiry_date and announcement.expiry_date < timezone.now()
+    is_active = (
+        announcement.is_published
+        and announcement.publish_date <= timezone.now()
+        and not is_expired
+    )
+    
+    context = {
+        'announcement': announcement,
+        'target_programmes': target_programmes,
+        'target_years': target_years,
+        'reach_count': reach_count,
+        'is_expired': is_expired,
+        'is_active': is_active,
+    }
+    return render(request, 'announcements/announcement_detail.html', context)
+
+
+@login_required
+def announcement_create(request):
+    """Create new announcement"""
+    if request.method == 'POST':
+        try:
+            # Get form data
+            title = request.POST.get('title')
+            content = request.POST.get('content')
+            priority = request.POST.get('priority', 'NORMAL')
+            is_published = request.POST.get('is_published') == 'on'
+            publish_date = request.POST.get('publish_date') or timezone.now()
+            expiry_date = request.POST.get('expiry_date') or None
+            target_year_levels = ','.join(request.POST.getlist('target_year_levels'))
+            
+            # Handle file upload
+            attachments = request.FILES.get('attachments')
+            
+            # Create announcement
+            announcement = Announcement.objects.create(
+                title=title,
+                content=content,
+                created_by=request.user,
+                priority=priority,
+                is_published=is_published,
+                publish_date=publish_date,
+                expiry_date=expiry_date,
+                target_year_levels=target_year_levels,
+                attachments=attachments
+            )
+            
+            # Add target programmes
+            target_programmes = request.POST.getlist('target_programmes')
+            if target_programmes:
+                announcement.target_programmes.set(target_programmes)
+            
+            messages.success(request, f'Announcement "{title}" created successfully!')
+            return redirect('announcement_detail', pk=announcement.pk)
+            
+        except Exception as e:
+            messages.error(request, f'Error creating announcement: {str(e)}')
+    
+    # Get programmes for selection
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    
+    context = {
+        'programmes': programmes,
+        'priority_choices': Announcement.PRIORITY_LEVELS,
+    }
+    return render(request, 'announcements/announcement_form.html', context)
+
+
+@login_required
+def announcement_update(request, pk):
+    """Update announcement"""
+    announcement = get_object_or_404(Announcement, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            announcement.title = request.POST.get('title')
+            announcement.content = request.POST.get('content')
+            announcement.priority = request.POST.get('priority', 'NORMAL')
+            announcement.is_published = request.POST.get('is_published') == 'on'
+            announcement.publish_date = request.POST.get('publish_date') or announcement.publish_date
+            announcement.expiry_date = request.POST.get('expiry_date') or None
+            announcement.target_year_levels = ','.join(request.POST.getlist('target_year_levels'))
+            
+            # Handle file upload
+            if request.FILES.get('attachments'):
+                announcement.attachments = request.FILES.get('attachments')
+            
+            announcement.save()
+            
+            # Update target programmes
+            target_programmes = request.POST.getlist('target_programmes')
+            if target_programmes:
+                announcement.target_programmes.set(target_programmes)
+            else:
+                announcement.target_programmes.clear()
+            
+            messages.success(request, f'Announcement "{announcement.title}" updated successfully!')
+            return redirect('announcement_detail', pk=announcement.pk)
+            
+        except Exception as e:
+            messages.error(request, f'Error updating announcement: {str(e)}')
+    
+    # Get programmes for selection
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    selected_programmes = announcement.target_programmes.values_list('id', flat=True)
+    
+    # Parse target year levels
+    target_years = []
+    if announcement.target_year_levels:
+        target_years = [y.strip() for y in announcement.target_year_levels.split(',') if y.strip()]
+    
+    context = {
+        'announcement': announcement,
+        'programmes': programmes,
+        'selected_programmes': list(selected_programmes),
+        'target_years': target_years,
+        'priority_choices': Announcement.PRIORITY_LEVELS,
+        'is_update': True,
+    }
+    return render(request, 'announcements/announcement_form.html', context)
+
+
+@login_required
+def announcement_delete(request, pk):
+    """Delete announcement"""
+    announcement = get_object_or_404(Announcement, pk=pk)
+    
+    if request.method == 'POST':
+        title = announcement.title
+        announcement.delete()
+        messages.success(request, f'Announcement "{title}" deleted successfully!')
+        return redirect('announcement_list')
+    
+    context = {
+        'announcement': announcement,
+    }
+    return render(request, 'announcements/announcement_confirm_delete.html', context)
+
+
+# ========================
+# EVENT VIEWS
+# ========================
+
+@login_required
+def event_list(request):
+    """List all events with filters"""
+    events = Event.objects.select_related('organizer', 'venue').prefetch_related('target_programmes')
+    
+    # Search filter
+    search_query = request.GET.get('search', '')
+    if search_query:
+        events = events.filter(
+            Q(title__icontains=search_query) | 
+            Q(description__icontains=search_query)
+        )
+    
+    # Event type filter
+    event_type = request.GET.get('event_type', '')
+    if event_type:
+        events = events.filter(event_type=event_type)
+    
+    # Date filter
+    date_filter = request.GET.get('date_filter', '')
+    today = timezone.now().date()
+    if date_filter == 'upcoming':
+        events = events.filter(event_date__gte=today)
+    elif date_filter == 'past':
+        events = events.filter(event_date__lt=today)
+    elif date_filter == 'today':
+        events = events.filter(event_date=today)
+    
+    # Published filter
+    status = request.GET.get('status', '')
+    if status == 'published':
+        events = events.filter(is_published=True)
+    elif status == 'draft':
+        events = events.filter(is_published=False)
+    
+    # Order by
+    events = events.order_by('-event_date', '-start_time')
+    
+    # Add registration count
+    events = events.annotate(registration_count=Count('registrations'))
+    
+    # Statistics
+    total_events = Event.objects.count()
+    upcoming_events = Event.objects.filter(event_date__gte=today, is_published=True).count()
+    mandatory_events = Event.objects.filter(is_mandatory=True, event_date__gte=today).count()
+    
+    # Pagination
+    paginator = Paginator(events, 15)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'events': page_obj,
+        'total_events': total_events,
+        'upcoming_events': upcoming_events,
+        'mandatory_events': mandatory_events,
+        'search_query': search_query,
+        'event_type_filter': event_type,
+        'date_filter': date_filter,
+        'status_filter': status,
+        'event_type_choices': Event.EVENT_TYPES,
+    }
+    return render(request, 'events/event_list.html', context)
+
+
+@login_required
+def event_detail(request, pk):
+    """View event details"""
+    event = get_object_or_404(
+        Event.objects.select_related('organizer', 'venue').prefetch_related('target_programmes'),
+        pk=pk
+    )
+    
+    # Get registrations
+    registrations = EventRegistration.objects.filter(event=event).select_related('student__user')
+    total_registrations = registrations.count()
+    attended_count = registrations.filter(attended=True).count()
+    
+    # Get target programmes
+    target_programmes = event.target_programmes.all()
+    
+    # Check if event is past
+    is_past = event.event_date < timezone.now().date()
+    
+    # Check if registration is full
+    is_full = event.max_attendees and total_registrations >= event.max_attendees
+    
+    context = {
+        'event': event,
+        'target_programmes': target_programmes,
+        'registrations': registrations[:10],  # Show first 10
+        'total_registrations': total_registrations,
+        'attended_count': attended_count,
+        'is_past': is_past,
+        'is_full': is_full,
+    }
+    return render(request, 'events/event_detail.html', context)
+
+
+@login_required
+def event_create(request):
+    """Create new event"""
+    if request.method == 'POST':
+        try:
+            # Get form data
+            title = request.POST.get('title')
+            description = request.POST.get('description')
+            event_type = request.POST.get('event_type')
+            venue_id = request.POST.get('venue')
+            event_date = request.POST.get('event_date')
+            start_time = request.POST.get('start_time')
+            end_time = request.POST.get('end_time')
+            is_mandatory = request.POST.get('is_mandatory') == 'on'
+            registration_required = request.POST.get('registration_required') == 'on'
+            is_published = request.POST.get('is_published') == 'on'
+            max_attendees = request.POST.get('max_attendees') or None
+            
+            # Handle file upload
+            poster = request.FILES.get('poster')
+            
+            # Get venue
+            venue = get_object_or_404(Venue, id=venue_id) if venue_id else None
+            
+            # Create event
+            event = Event.objects.create(
+                title=title,
+                description=description,
+                event_type=event_type,
+                venue=venue,
+                event_date=event_date,
+                start_time=start_time,
+                end_time=end_time,
+                organizer=request.user,
+                is_mandatory=is_mandatory,
+                registration_required=registration_required,
+                is_published=is_published,
+                max_attendees=max_attendees,
+                poster=poster
+            )
+            
+            # Add target programmes
+            target_programmes = request.POST.getlist('target_programmes')
+            if target_programmes:
+                event.target_programmes.set(target_programmes)
+            
+            messages.success(request, f'Event "{title}" created successfully!')
+            return redirect('event_detail', pk=event.pk)
+            
+        except Exception as e:
+            messages.error(request, f'Error creating event: {str(e)}')
+    
+    # Get venues and programmes for selection
+    venues = Venue.objects.filter(is_available=True).order_by('name')
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    
+    context = {
+        'venues': venues,
+        'programmes': programmes,
+        'event_type_choices': Event.EVENT_TYPES,
+    }
+    return render(request, 'events/event_form.html', context)
+
+
+@login_required
+def event_update(request, pk):
+    """Update event"""
+    event = get_object_or_404(Event, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            event.title = request.POST.get('title')
+            event.description = request.POST.get('description')
+            event.event_type = request.POST.get('event_type')
+            
+            venue_id = request.POST.get('venue')
+            event.venue = get_object_or_404(Venue, id=venue_id) if venue_id else None
+            
+            event.event_date = request.POST.get('event_date')
+            event.start_time = request.POST.get('start_time')
+            event.end_time = request.POST.get('end_time')
+            event.is_mandatory = request.POST.get('is_mandatory') == 'on'
+            event.registration_required = request.POST.get('registration_required') == 'on'
+            event.is_published = request.POST.get('is_published') == 'on'
+            event.max_attendees = request.POST.get('max_attendees') or None
+            
+            # Handle file upload
+            if request.FILES.get('poster'):
+                event.poster = request.FILES.get('poster')
+            
+            event.save()
+            
+            # Update target programmes
+            target_programmes = request.POST.getlist('target_programmes')
+            if target_programmes:
+                event.target_programmes.set(target_programmes)
+            else:
+                event.target_programmes.clear()
+            
+            messages.success(request, f'Event "{event.title}" updated successfully!')
+            return redirect('event_detail', pk=event.pk)
+            
+        except Exception as e:
+            messages.error(request, f'Error updating event: {str(e)}')
+    
+    # Get venues and programmes for selection
+    venues = Venue.objects.filter(is_available=True).order_by('name')
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    selected_programmes = event.target_programmes.values_list('id', flat=True)
+    
+    context = {
+        'event': event,
+        'venues': venues,
+        'programmes': programmes,
+        'selected_programmes': list(selected_programmes),
+        'event_type_choices': Event.EVENT_TYPES,
+        'is_update': True,
+    }
+    return render(request, 'events/event_form.html', context)
+
+
+@login_required
+def event_delete(request, pk):
+    """Delete event"""
+    event = get_object_or_404(Event, pk=pk)
+    
+    if request.method == 'POST':
+        title = event.title
+        event.delete()
+        messages.success(request, f'Event "{title}" deleted successfully!')
+        return redirect('event_list')
+    
+    # Get registration count
+    registration_count = EventRegistration.objects.filter(event=event).count()
+    
+    context = {
+        'event': event,
+        'registration_count': registration_count,
+    }
+    return render(request, 'events/event_confirm_delete.html', context)
