@@ -936,6 +936,12 @@ def register_units(request):
     
     return render(request, 'student/units/register_units.html', context)
 
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.utils import timezone
+from datetime import timedelta
+from .models import Student, UnitEnrollment
 
 @login_required(login_url='login')
 def student_enrollments(request):
@@ -946,42 +952,77 @@ def student_enrollments(request):
         messages.error(request, "Student profile not found.")
         return redirect('student_dashboard')
     
-    # Get all enrollments grouped by academic year
+    # Get all enrollments - ONLY get unique enrollments per semester
     enrollments = UnitEnrollment.objects.filter(
         student=student
-    ).select_related('unit', 'semester', 'semester__academic_year').order_by(
+    ).select_related(
+        'unit', 
+        'semester', 
+        'semester__academic_year'
+    ).order_by(
         '-semester__academic_year__start_date',
-        '-semester__semester_number'
+        'semester__semester_number',
+        'unit__code'
     )
     
-    # Organize by academic year
+    # Debug: Print to console to see what we're getting
+    print("\n=== DEBUGGING ENROLLMENTS ===")
+    for e in enrollments:
+        print(f"Unit: {e.unit.code} | Semester: {e.semester.semester_number} | Year: {e.semester.academic_year.year_code}")
+    print("=== END DEBUG ===\n")
+    
+    # Organize by academic year and semester
     enrollments_by_year = {}
+    
     for enrollment in enrollments:
         year_code = enrollment.semester.academic_year.year_code
+        sem_num = enrollment.semester.semester_number
+        
+        # Initialize year structure if needed
         if year_code not in enrollments_by_year:
             enrollments_by_year[year_code] = {
                 'academic_year': enrollment.semester.academic_year,
                 'semesters': {}
             }
         
-        sem_num = enrollment.semester.semester_number
+        # Initialize semester structure if needed
         if sem_num not in enrollments_by_year[year_code]['semesters']:
             enrollments_by_year[year_code]['semesters'][sem_num] = {
                 'semester': enrollment.semester,
+                'semester_number': sem_num,  # Explicitly store semester number
                 'units': []
             }
         
-        enrollments_by_year[year_code]['semesters'][sem_num]['units'].append(enrollment)
+        # CRITICAL: Only add enrollment to the semester it ACTUALLY belongs to
+        # Check if this enrollment's semester matches the current semester we're adding to
+        if enrollment.semester.semester_number == sem_num:
+            enrollments_by_year[year_code]['semesters'][sem_num]['units'].append(enrollment)
     
     # Calculate registration dates for drop eligibility
     current_date = timezone.now().date()
     for year_code in enrollments_by_year:
         for sem_num in enrollments_by_year[year_code]['semesters']:
             for enrollment in enrollments_by_year[year_code]['semesters'][sem_num]['units']:
-                registration_date = enrollment.enrollment_date.date()
+                # Handle both datetime and date objects
+                if hasattr(enrollment.enrollment_date, 'date'):
+                    registration_date = enrollment.enrollment_date.date()
+                else:
+                    registration_date = enrollment.enrollment_date
+                
                 drop_eligible_date = registration_date + timedelta(days=7)
                 enrollment.can_drop = current_date >= drop_eligible_date
-                enrollment.days_until_drop = (drop_eligible_date - current_date).days
+                days_diff = (drop_eligible_date - current_date).days
+                enrollment.days_until_drop = max(0, days_diff)  # Ensure non-negative
+    
+    # Debug: Print final structure
+    print("\n=== FINAL STRUCTURE ===")
+    for year_code, year_data in enrollments_by_year.items():
+        print(f"Year: {year_code}")
+        for sem_num, sem_data in year_data['semesters'].items():
+            print(f"  Semester {sem_num}: {len(sem_data['units'])} units")
+            for e in sem_data['units']:
+                print(f"    - {e.unit.code}")
+    print("=== END STRUCTURE ===\n")
     
     context = {
         'enrollments_by_year': enrollments_by_year,

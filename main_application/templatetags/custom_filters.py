@@ -11,3 +11,24 @@ def get_item(dictionary, key):
     if dictionary is None:
         return None
     return dictionary.get(key)
+
+
+# Create this file: your_app/templatetags/custom_filters.py
+
+from django import template
+
+register = template.Library()
+
+@register.filter
+def get_item(dictionary, key):
+    """Get an item from a dictionary using a variable key"""
+    if dictionary is None:
+        return None
+    return dictionary.get(key)
+
+@register.filter
+def dictsort(value):
+    """Sort dictionary keys"""
+    if isinstance(value, dict):
+        return sorted(value.keys())
+    return value

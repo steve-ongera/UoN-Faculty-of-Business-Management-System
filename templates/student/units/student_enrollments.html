@@ -1,7 +1,7 @@
 {% extends 'student_base.html' %}
 
 {% block title %}My Enrollments - Faculty Management System{% endblock %}
-
+{% load custom_filters %}
 {% block page_title %}My Enrollments{% endblock %}
 
 {% block extra_css %}
@@ -160,6 +160,7 @@
     .semester-content {
         display: none;
         padding: 0 16px;
+        margin-bottom: 20px;
     }
 
     .semester-content.active {
@@ -203,6 +204,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        flex-wrap: wrap;
     }
 
     .unit-code {
@@ -234,6 +236,18 @@
         color: #4F46E5;
         border-radius: 4px;
         font-weight: 600;
+    }
+
+    .semester-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        background: #DBEAFE;
+        color: #1E40AF;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 11px;
     }
 
     .status-badge {
@@ -351,6 +365,7 @@
     .register-units-btn:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
+        color: white;
     }
 
     @media (max-width: 768px) {
@@ -409,7 +424,7 @@
     <!-- Academic Years Tabs -->
     {% if enrollments_by_year %}
         {% for year_code, year_data in enrollments_by_year.items %}
-        <div class="academic-year-container">
+        <div class="academic-year-container" data-year="{{ year_code }}">
             <!-- Year Header (Clickable) -->
             <div class="year-header active" onclick="toggleYear(this)">
                 <div class="year-title">
@@ -421,30 +436,35 @@
                 </div>
             </div>
 
-            <!-- Semester Tabs -->
-            <div class="semester-tabs">
-                {% for sem_num, sem_data in year_data.semesters.items %}
+            <!-- Semester Tabs - Sort by semester number -->
+            <div class="semester-tabs" style="display: flex;">
+                {% for sem_num in year_data.semesters.keys|dictsort %}
                 <button 
                     type="button" 
                     class="semester-tab {% if forloop.first %}active{% endif %}"
+                    data-semester="{{ sem_num }}"
                     onclick="showSemester(this, '{{ year_code }}-sem-{{ sem_num }}')">
                     <i class="bi bi-hourglass-split"></i> Semester {{ sem_num }}
                     <span style="margin-left: 6px; padding: 2px 6px; background: rgba(255,255,255,0.3); border-radius: 3px; font-size: 11px;">
-                        {{ sem_data.units|length }}
+                        {{ year_data.semesters|get_item:sem_num|get_item:"units"|length }}
                     </span>
                 </button>
                 {% endfor %}
             </div>
 
-            <!-- Semester Contents -->
-            {% for sem_num, sem_data in year_data.semesters.items %}
+            <!-- Semester Contents - Sort by semester number -->
+            {% for sem_num in year_data.semesters.keys|dictsort %}
+            {% with sem_data=year_data.semesters|get_item:sem_num %}
             <div 
                 id="{{ year_code }}-sem-{{ sem_num }}" 
-                class="semester-content {% if forloop.first %}active{% endif %}">
+                class="semester-content {% if forloop.first %}active{% endif %}"
+                data-semester="{{ sem_num }}"
+                style="{% if not forloop.first %}display: none;{% endif %}">
                 
+                {% if sem_data.units %}
                 <div class="units-grid">
                     {% for enrollment in sem_data.units %}
-                    <div class="unit-card {% if enrollment.status == 'DROPPED' %}dropped{% endif %}">
+                    <div class="unit-card {% if enrollment.status == 'DROPPED' %}dropped{% endif %}" data-enrollment-semester="{{ enrollment.semester.semester_number }}">
                         <div class="unit-info">
                             <div class="unit-header">
                                 <span class="unit-code">{{ enrollment.unit.code }}</span>
@@ -455,6 +475,12 @@
                                 <span class="unit-badge">
                                     <i class="bi bi-book-fill"></i>
                                     {{ enrollment.unit.credit_hours }} Credits
+                                </span>
+
+                                <!-- Show actual semester this unit was enrolled in -->
+                                <span class="semester-badge">
+                                    <i class="bi bi-calendar-check"></i>
+                                    Sem {{ enrollment.semester.semester_number }}
                                 </span>
                                 
                                 <span class="status-badge status-{{ enrollment.status|lower }}">
@@ -499,7 +525,19 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="bi bi-inbox"></i>
+                    </div>
+                    <h3 class="empty-title">No Units in Semester {{ sem_num }}</h3>
+                    <p class="empty-text">
+                        You haven't enrolled in any units for this semester.
+                    </p>
+                </div>
+                {% endif %}
             </div>
+            {% endwith %}
             {% endfor %}
         </div>
         {% endfor %}
@@ -531,21 +569,31 @@
         if (nextSibling && nextSibling.classList.contains('semester-tabs')) {
             nextSibling.style.display = isActive ? 'none' : 'flex';
             
-            // Hide all semester content
-            let current = nextSibling.nextElementSibling;
-            while (current && current.classList.contains('semester-content')) {
-                current.style.display = isActive ? 'none' : (current.classList.contains('active') ? 'block' : 'none');
-                current = current.nextElementSibling;
-            }
+            // Find all semester content divs after the tabs
+            const yearContainer = element.closest('.academic-year-container');
+            const semesterContents = yearContainer.querySelectorAll('.semester-content');
+            
+            semesterContents.forEach(content => {
+                if (isActive) {
+                    content.style.display = 'none';
+                } else {
+                    // Only show if it's the active semester
+                    if (content.classList.contains('active')) {
+                        content.style.display = 'block';
+                    }
+                }
+            });
         }
         
         element.classList.toggle('active');
     }
 
     function showSemester(button, contentId) {
-        // Get all tabs in this year
-        const tabs = button.parentElement.querySelectorAll('.semester-tab');
+        // Get the year container
         const yearContainer = button.closest('.academic-year-container');
+        
+        // Get all tabs in this year
+        const tabs = yearContainer.querySelectorAll('.semester-tab');
         
         // Remove active from all tabs
         tabs.forEach(tab => tab.classList.remove('active'));
@@ -553,19 +601,29 @@
         // Add active to clicked tab
         button.classList.add('active');
         
-        // Hide all semester contents
+        // Hide all semester contents in this year
         const contents = yearContainer.querySelectorAll('.semester-content');
-        contents.forEach(content => content.classList.remove('active'));
+        contents.forEach(content => {
+            content.classList.remove('active');
+            content.style.display = 'none';
+        });
         
         // Show selected content
-        document.getElementById(contentId).classList.add('active');
+        const selectedContent = document.getElementById(contentId);
+        if (selectedContent) {
+            selectedContent.classList.add('active');
+            selectedContent.style.display = 'block';
+        }
     }
 
-    // Initialize
+    // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
         // Show first semester of each year by default
-        document.querySelectorAll('.semester-content.active').forEach(content => {
-            content.style.display = 'block';
+        document.querySelectorAll('.academic-year-container').forEach(yearContainer => {
+            const firstSemesterContent = yearContainer.querySelector('.semester-content.active');
+            if (firstSemesterContent) {
+                firstSemesterContent.style.display = 'block';
+            }
         });
     });
 </script>
