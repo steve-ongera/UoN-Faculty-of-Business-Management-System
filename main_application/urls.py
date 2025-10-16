@@ -105,5 +105,15 @@ urlpatterns = [
     path('admin-timetable/view/', views.timetable_view, name='timetable_view'),
     path('admin-timetable/get-data/<int:programme_id>/<int:year_level>/<int:semester_id>/', views.get_timetable_data, name='get_timetable_data'),
     path('admin-timetable/export-excel/', views.export_timetable_excel, name='export_timetable_excel'),
+
+     # Main user management page
+    path('users/', views.user_management_view, name='user_management'),
+    path('api/users/', views.get_users_list, name='get_users_list'),
+    path('api/users/<int:user_id>/', views.get_user_detail, name='get_user_detail'),
+    path('api/users/<int:user_id>/update/', views.update_user, name='update_user'),
+    path('api/users/<int:user_id>/change-password/', views.change_user_password, name='change_user_password'),
+    path('api/users/bulk-update/', views.bulk_update_users, name='bulk_update_users'),
+    path('api/users/<int:user_id>/delete/', views.delete_user, name='delete_user'),
+    path('api/departments/<int:department_id>/programmes/', views.get_programmes_by_department, name='get_programmes_by_department'),
 ]
 

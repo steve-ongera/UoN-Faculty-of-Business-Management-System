@@ -5584,3 +5584,454 @@ def export_timetable_excel(request):
         
     except Exception as e:
         return HttpResponse(f'Error generating Excel: {str(e)}', status=400)
+    
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.db.models import Q
+from django.contrib.auth.hashers import make_password
+from django.core.paginator import Paginator
+from .models import User, Student, Lecturer, Department, Programme
+import json
+from datetime import datetime
+
+
+@login_required
+def user_management_view(request):
+    """
+    Main user management view
+    """
+    departments = Department.objects.all().order_by('name')
+    
+    context = {
+        'departments': departments,
+        'user_types': User.USER_TYPES,
+    }
+    
+    return render(request, 'admin/user_management.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_users_list(request):
+    """
+    Get paginated list of users with filtering and search
+    """
+    try:
+        # Get query parameters
+        page = int(request.GET.get('page', 1))
+        per_page = int(request.GET.get('per_page', 20))
+        search = request.GET.get('search', '').strip()
+        user_type = request.GET.get('user_type', '')
+        is_active = request.GET.get('is_active', '')
+        department_id = request.GET.get('department', '')
+        
+        # Start with all users
+        users = User.objects.all()
+        
+        # Apply search filter
+        if search:
+            users = users.filter(
+                Q(username__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(phone_number__icontains=search)
+            )
+        
+        # Apply user type filter
+        if user_type:
+            users = users.filter(user_type=user_type)
+        
+        # Apply active status filter
+        if is_active:
+            users = users.filter(is_active_user=(is_active == 'true'))
+        
+        # Apply department filter for students and lecturers
+        if department_id:
+            users = users.filter(
+                Q(student_profile__programme__department_id=department_id) |
+                Q(lecturer_profile__department_id=department_id)
+            )
+        
+        # Order by date joined (newest first)
+        users = users.order_by('-date_joined')
+        
+        # Get total count before pagination
+        total_count = users.count()
+        
+        # Paginate
+        paginator = Paginator(users, per_page)
+        page_obj = paginator.get_page(page)
+        
+        # Prepare user data
+        users_data = []
+        for user in page_obj:
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'full_name': user.get_full_name() or user.username,
+                'email': user.email,
+                'phone_number': user.phone_number or '',
+                'user_type': user.user_type,
+                'user_type_display': user.get_user_type_display(),
+                'is_active': user.is_active_user,
+                'is_staff': user.is_staff,
+                'is_superuser': user.is_superuser,
+                'date_joined': user.date_joined.strftime('%Y-%m-%d %H:%M'),
+                'last_login': user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Never',
+            }
+            
+            # Add specific profile info
+            if user.user_type == 'STUDENT' and hasattr(user, 'student_profile'):
+                student = user.student_profile
+                user_data['registration_number'] = student.registration_number
+                user_data['programme'] = student.programme.code
+                user_data['year'] = student.current_year
+            elif user.user_type == 'LECTURER' and hasattr(user, 'lecturer_profile'):
+                lecturer = user.lecturer_profile
+                user_data['staff_number'] = lecturer.staff_number
+                user_data['department'] = lecturer.department.code
+            
+            users_data.append(user_data)
+        
+        return JsonResponse({
+            'success': True,
+            'users': users_data,
+            'pagination': {
+                'current_page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_count': total_count,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+                'per_page': per_page,
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_user_detail(request, user_id):
+    """
+    Get detailed information about a specific user
+    """
+    try:
+        user = get_object_or_404(User, id=user_id)
+        
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'email': user.email,
+            'phone_number': user.phone_number or '',
+            'user_type': user.user_type,
+            'user_type_display': user.get_user_type_display(),
+            'is_active': user.is_active_user,
+            'is_staff': user.is_staff,
+            'is_superuser': user.is_superuser,
+            'date_joined': user.date_joined.strftime('%Y-%m-%d %H:%M:%S'),
+            'last_login': user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else None,
+            'profile_picture': user.profile_picture.url if user.profile_picture else None,
+        }
+        
+        # Add specific profile info
+        if user.user_type == 'STUDENT' and hasattr(user, 'student_profile'):
+            student = user.student_profile
+            user_data['student_profile'] = {
+                'registration_number': student.registration_number,
+                'first_name': student.first_name,
+                'last_name': student.last_name,
+                'surname': student.surname,
+                'programme_id': student.programme.id,
+                'programme_name': str(student.programme),
+                'current_year': student.current_year,
+                'intake_id': student.intake.id,
+                'intake_name': str(student.intake),
+                'admission_date': student.admission_date.strftime('%Y-%m-%d'),
+                'is_active': student.is_active,
+                'phone': student.phone or '',
+                'email': student.email or '',
+                'date_of_birth': student.date_of_birth.strftime('%Y-%m-%d') if student.date_of_birth else '',
+                'address': student.address or '',
+                'parent_name': student.parent_name or '',
+                'parent_phone': student.parent_phone or '',
+                'guardian_name': student.guardian_name or '',
+                'guardian_phone': student.guardian_phone or '',
+            }
+        elif user.user_type == 'LECTURER' and hasattr(user, 'lecturer_profile'):
+            lecturer = user.lecturer_profile
+            user_data['lecturer_profile'] = {
+                'staff_number': lecturer.staff_number,
+                'department_id': lecturer.department.id,
+                'department_name': str(lecturer.department),
+                'specialization': lecturer.specialization,
+                'office_location': lecturer.office_location,
+                'consultation_hours': lecturer.consultation_hours,
+                'is_active': lecturer.is_active,
+            }
+        
+        return JsonResponse({
+            'success': True,
+            'user': user_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_user(request, user_id):
+    """
+    Update user information
+    """
+    try:
+        user = get_object_or_404(User, id=user_id)
+        data = json.loads(request.body)
+        
+        # Update basic user fields
+        if 'first_name' in data:
+            user.first_name = data['first_name']
+        if 'last_name' in data:
+            user.last_name = data['last_name']
+        if 'email' in data:
+            user.email = data['email']
+        if 'phone_number' in data:
+            user.phone_number = data['phone_number']
+        if 'is_active' in data:
+            user.is_active_user = data['is_active']
+        if 'is_staff' in data:
+            user.is_staff = data['is_staff']
+        if 'is_superuser' in data:
+            user.is_superuser = data['is_superuser']
+        
+        user.save()
+        
+        # Update profile-specific fields
+        if user.user_type == 'STUDENT' and hasattr(user, 'student_profile'):
+            student = user.student_profile
+            if 'student_profile' in data:
+                profile_data = data['student_profile']
+                if 'first_name' in profile_data:
+                    student.first_name = profile_data['first_name']
+                if 'last_name' in profile_data:
+                    student.last_name = profile_data['last_name']
+                if 'surname' in profile_data:
+                    student.surname = profile_data['surname']
+                if 'phone' in profile_data:
+                    student.phone = profile_data['phone']
+                if 'email' in profile_data:
+                    student.email = profile_data['email']
+                if 'address' in profile_data:
+                    student.address = profile_data['address']
+                if 'date_of_birth' in profile_data:
+                    student.date_of_birth = profile_data['date_of_birth']
+                if 'parent_name' in profile_data:
+                    student.parent_name = profile_data['parent_name']
+                if 'parent_phone' in profile_data:
+                    student.parent_phone = profile_data['parent_phone']
+                if 'guardian_name' in profile_data:
+                    student.guardian_name = profile_data['guardian_name']
+                if 'guardian_phone' in profile_data:
+                    student.guardian_phone = profile_data['guardian_phone']
+                if 'is_active' in profile_data:
+                    student.is_active = profile_data['is_active']
+                
+                student.save()
+        
+        elif user.user_type == 'LECTURER' and hasattr(user, 'lecturer_profile'):
+            lecturer = user.lecturer_profile
+            if 'lecturer_profile' in data:
+                profile_data = data['lecturer_profile']
+                if 'specialization' in profile_data:
+                    lecturer.specialization = profile_data['specialization']
+                if 'office_location' in profile_data:
+                    lecturer.office_location = profile_data['office_location']
+                if 'consultation_hours' in profile_data:
+                    lecturer.consultation_hours = profile_data['consultation_hours']
+                if 'is_active' in profile_data:
+                    lecturer.is_active = profile_data['is_active']
+                
+                lecturer.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'User updated successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def change_user_password(request, user_id):
+    """
+    Change user password
+    """
+    try:
+        user = get_object_or_404(User, id=user_id)
+        data = json.loads(request.body)
+        
+        new_password = data.get('new_password', '').strip()
+        
+        if not new_password:
+            return JsonResponse({
+                'success': False,
+                'error': 'Password cannot be empty'
+            }, status=400)
+        
+        if len(new_password) < 6:
+            return JsonResponse({
+                'success': False,
+                'error': 'Password must be at least 6 characters long'
+            }, status=400)
+        
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Password changed successfully for {user.username}'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def bulk_update_users(request):
+    """
+    Bulk update user status or type
+    """
+    try:
+        data = json.loads(request.body)
+        user_ids = data.get('user_ids', [])
+        action = data.get('action', '')
+        value = data.get('value', None)
+        
+        if not user_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No users selected'
+            }, status=400)
+        
+        users = User.objects.filter(id__in=user_ids)
+        
+        if action == 'activate':
+            users.update(is_active_user=True)
+            message = f'{users.count()} users activated'
+        elif action == 'deactivate':
+            users.update(is_active_user=False)
+            message = f'{users.count()} users deactivated'
+        elif action == 'make_staff':
+            users.update(is_staff=True)
+            message = f'{users.count()} users made staff'
+        elif action == 'remove_staff':
+            users.update(is_staff=False)
+            message = f'{users.count()} users removed from staff'
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid action'
+            }, status=400)
+        
+        return JsonResponse({
+            'success': True,
+            'message': message
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_user(request, user_id):
+    """
+    Delete a user (soft delete by deactivating)
+    """
+    try:
+        user = get_object_or_404(User, id=user_id)
+        
+        # Prevent deleting superuser
+        if user.is_superuser:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cannot delete superuser account'
+            }, status=400)
+        
+        # Soft delete
+        user.is_active_user = False
+        user.is_active = False
+        user.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'User {user.username} has been deactivated'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_programmes_by_department(request, department_id):
+    """
+    Get programmes for a specific department
+    """
+    try:
+        programmes = Programme.objects.filter(
+            department_id=department_id,
+            is_active=True
+        ).order_by('name')
+        
+        programmes_data = [
+            {
+                'id': prog.id,
+                'code': prog.code,
+                'name': prog.name,
+                'level': prog.level
+            }
+            for prog in programmes
+        ]
+        
+        return JsonResponse({
+            'success': True,
+            'programmes': programmes_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
