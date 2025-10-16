@@ -2064,12 +2064,15 @@ def delete_conversation(request, user_id):
 
 
 
-
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Avg, Count, Q, F
 from decimal import Decimal
 from collections import defaultdict
+from .models import (
+    Student, UnitEnrollment, ProgrammeUnit, 
+    Semester, StudentMarks, FinalGrade
+)
 
 @login_required
 def student_grades_view(request):
@@ -2118,19 +2121,29 @@ def student_grades_view(request):
     for enrollment in enrollments:
         semester = enrollment.semester
         academic_year = semester.academic_year
-        
-        # Determine year level from program unit
-        try:
-            program_unit = ProgrammeUnit.objects.get(
-                programme=student.programme,
-                unit=enrollment.unit
-            )
-            year_level = program_unit.year_level
-        except:
-            # Fallback to student's enrollment year
-            year_level = student.current_year
-        
         semester_num = semester.semester_number
+        
+        # Get the correct year level from ProgrammeUnit
+        # Filter by student's programme to avoid multiple results
+        try:
+            program_unit = ProgrammeUnit.objects.filter(
+                programme=student.programme,
+                unit=enrollment.unit,
+                semester=semester_num
+            ).first()  # Use .first() instead of .get()
+            
+            if program_unit:
+                year_level = program_unit.year_level
+            else:
+                # Try without semester constraint
+                program_unit = ProgrammeUnit.objects.filter(
+                    programme=student.programme,
+                    unit=enrollment.unit
+                ).first()
+                year_level = program_unit.year_level if program_unit else 1
+        except Exception as e:
+            # Fallback to Year 1 if any error occurs
+            year_level = 1
         
         # Get assessment breakdown
         assessment_breakdown = []
@@ -2140,7 +2153,11 @@ def student_grades_view(request):
         for mark in marks:
             component = mark.assessment_component
             # Calculate weighted marks
-            weighted_marks = (mark.marks_obtained / component.max_marks) * component.weight_percentage
+            if component.max_marks > 0:
+                weighted_marks = (mark.marks_obtained / component.max_marks) * component.weight_percentage
+            else:
+                weighted_marks = Decimal('0.00')
+            
             total_marks += weighted_marks
             
             assessment_breakdown.append({
@@ -2180,7 +2197,7 @@ def student_grades_view(request):
                 total_grade_points += (final_grade.grade_point * enrollment.unit.credit_hours)
                 total_units_completed += 1
         
-        # Add to structure
+        # Add to structure based on ACTUAL year and semester
         year_data = grades_by_year[year_level]
         year_data['year_label'] = f'Year {year_level}'
         
@@ -2213,11 +2230,13 @@ def student_grades_view(request):
     if total_credits_earned > 0:
         cumulative_gpa = round(total_grade_points / total_credits_earned, 2)
     
-    # Sort the data
-    grades_by_year = dict(sorted(grades_by_year.items()))
+    # Sort the data properly - Year 1 first, then Year 2, etc.
+    grades_by_year = dict(sorted(grades_by_year.items(), key=lambda x: x[0]))
+    
+    # Sort semesters within each year - Semester 1 first, then 2, then 3
     for year_level in grades_by_year:
         grades_by_year[year_level]['semesters'] = dict(
-            sorted(grades_by_year[year_level]['semesters'].items())
+            sorted(grades_by_year[year_level]['semesters'].items(), key=lambda x: x[0])
         )
     
     context = {
