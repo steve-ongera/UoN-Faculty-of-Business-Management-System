@@ -6698,3 +6698,344 @@ def get_audit_logs(request):
             'total_pages': paginator,
         }
         })
+
+
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Count
+from django.utils import timezone
+from datetime import datetime
+from .models import AcademicYear, Semester
+import json
+
+
+@login_required
+def academic_management(request):
+    """Main view for academic year and semester management"""
+    academic_years = AcademicYear.objects.all().annotate(
+        semester_count=Count('semesters')
+    )
+    
+    context = {
+        'academic_years': academic_years,
+    }
+    return render(request, 'admin/academic_management.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_academic_year(request, year_id):
+    """Get single academic year details"""
+    try:
+        academic_year = AcademicYear.objects.get(id=year_id)
+        data = {
+            'id': academic_year.id,
+            'year_code': academic_year.year_code,
+            'start_date': academic_year.start_date.strftime('%Y-%m-%d'),
+            'end_date': academic_year.end_date.strftime('%Y-%m-%d'),
+            'is_current': academic_year.is_current,
+        }
+        return JsonResponse({'success': True, 'data': data})
+    except AcademicYear.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Academic year not found'}, status=404)
+
+
+@login_required
+@require_http_methods(["POST"])
+def create_academic_year(request):
+    """Create new academic year"""
+    try:
+        data = json.loads(request.body)
+        
+        year_code = data.get('year_code')
+        start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date()
+        end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date()
+        is_current = data.get('is_current', False)
+        
+        # Validation
+        if not year_code or not start_date or not end_date:
+            return JsonResponse({'success': False, 'message': 'All fields are required'}, status=400)
+        
+        if start_date >= end_date:
+            return JsonResponse({'success': False, 'message': 'End date must be after start date'}, status=400)
+        
+        # Check if year_code already exists
+        if AcademicYear.objects.filter(year_code=year_code).exists():
+            return JsonResponse({'success': False, 'message': 'Academic year code already exists'}, status=400)
+        
+        # If marking as current, unset other current years
+        if is_current:
+            AcademicYear.objects.filter(is_current=True).update(is_current=False)
+        
+        academic_year = AcademicYear.objects.create(
+            year_code=year_code,
+            start_date=start_date,
+            end_date=end_date,
+            is_current=is_current
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Academic year created successfully',
+            'data': {
+                'id': academic_year.id,
+                'year_code': academic_year.year_code,
+                'start_date': academic_year.start_date.strftime('%Y-%m-%d'),
+                'end_date': academic_year.end_date.strftime('%Y-%m-%d'),
+                'is_current': academic_year.is_current,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_academic_year(request, year_id):
+    """Update existing academic year"""
+    try:
+        academic_year = get_object_or_404(AcademicYear, id=year_id)
+        data = json.loads(request.body)
+        
+        year_code = data.get('year_code')
+        start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date()
+        end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date()
+        is_current = data.get('is_current', False)
+        
+        # Validation
+        if start_date >= end_date:
+            return JsonResponse({'success': False, 'message': 'End date must be after start date'}, status=400)
+        
+        # Check if year_code already exists (excluding current)
+        if AcademicYear.objects.filter(year_code=year_code).exclude(id=year_id).exists():
+            return JsonResponse({'success': False, 'message': 'Academic year code already exists'}, status=400)
+        
+        # If marking as current, unset other current years
+        if is_current:
+            AcademicYear.objects.filter(is_current=True).exclude(id=year_id).update(is_current=False)
+        
+        academic_year.year_code = year_code
+        academic_year.start_date = start_date
+        academic_year.end_date = end_date
+        academic_year.is_current = is_current
+        academic_year.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Academic year updated successfully',
+            'data': {
+                'id': academic_year.id,
+                'year_code': academic_year.year_code,
+                'start_date': academic_year.start_date.strftime('%Y-%m-%d'),
+                'end_date': academic_year.end_date.strftime('%Y-%m-%d'),
+                'is_current': academic_year.is_current,
+            }
+        })
+    except AcademicYear.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Academic year not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_academic_year(request, year_id):
+    """Delete academic year"""
+    try:
+        academic_year = get_object_or_404(AcademicYear, id=year_id)
+        
+        # Check if there are related semesters
+        if academic_year.semesters.exists():
+            return JsonResponse({
+                'success': False,
+                'message': 'Cannot delete academic year with existing semesters. Delete semesters first.'
+            }, status=400)
+        
+        academic_year.delete()
+        return JsonResponse({'success': True, 'message': 'Academic year deleted successfully'})
+    except AcademicYear.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Academic year not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+# ========================
+# SEMESTER MANAGEMENT
+# ========================
+
+@login_required
+@require_http_methods(["GET"])
+def get_semesters(request, year_id):
+    """Get all semesters for an academic year"""
+    try:
+        semesters = Semester.objects.filter(academic_year_id=year_id)
+        data = [{
+            'id': sem.id,
+            'semester_number': sem.semester_number,
+            'semester_display': sem.get_semester_number_display(),
+            'start_date': sem.start_date.strftime('%Y-%m-%d'),
+            'end_date': sem.end_date.strftime('%Y-%m-%d'),
+            'registration_deadline': sem.registration_deadline.strftime('%Y-%m-%d'),
+            'is_current': sem.is_current,
+        } for sem in semesters]
+        
+        return JsonResponse({'success': True, 'data': data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_semester(request, semester_id):
+    """Get single semester details"""
+    try:
+        semester = Semester.objects.get(id=semester_id)
+        data = {
+            'id': semester.id,
+            'academic_year_id': semester.academic_year.id,
+            'semester_number': semester.semester_number,
+            'start_date': semester.start_date.strftime('%Y-%m-%d'),
+            'end_date': semester.end_date.strftime('%Y-%m-%d'),
+            'registration_deadline': semester.registration_deadline.strftime('%Y-%m-%d'),
+            'is_current': semester.is_current,
+        }
+        return JsonResponse({'success': True, 'data': data})
+    except Semester.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Semester not found'}, status=404)
+
+
+@login_required
+@require_http_methods(["POST"])
+def create_semester(request, year_id):
+    """Create new semester"""
+    try:
+        academic_year = get_object_or_404(AcademicYear, id=year_id)
+        data = json.loads(request.body)
+        
+        semester_number = int(data.get('semester_number'))
+        start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date()
+        end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date()
+        registration_deadline = datetime.strptime(data.get('registration_deadline'), '%Y-%m-%d').date()
+        is_current = data.get('is_current', False)
+        
+        # Validation
+        if start_date >= end_date:
+            return JsonResponse({'success': False, 'message': 'End date must be after start date'}, status=400)
+        
+        if registration_deadline > start_date:
+            return JsonResponse({'success': False, 'message': 'Registration deadline must be before start date'}, status=400)
+        
+        # Check if semester already exists
+        if Semester.objects.filter(academic_year=academic_year, semester_number=semester_number).exists():
+            return JsonResponse({'success': False, 'message': 'Semester already exists for this academic year'}, status=400)
+        
+        # If marking as current, unset other current semesters
+        if is_current:
+            Semester.objects.filter(is_current=True).update(is_current=False)
+        
+        semester = Semester.objects.create(
+            academic_year=academic_year,
+            semester_number=semester_number,
+            start_date=start_date,
+            end_date=end_date,
+            registration_deadline=registration_deadline,
+            is_current=is_current
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Semester created successfully',
+            'data': {
+                'id': semester.id,
+                'semester_number': semester.semester_number,
+                'semester_display': semester.get_semester_number_display(),
+                'start_date': semester.start_date.strftime('%Y-%m-%d'),
+                'end_date': semester.end_date.strftime('%Y-%m-%d'),
+                'registration_deadline': semester.registration_deadline.strftime('%Y-%m-%d'),
+                'is_current': semester.is_current,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_semester(request, semester_id):
+    """Update existing semester"""
+    try:
+        semester = get_object_or_404(Semester, id=semester_id)
+        data = json.loads(request.body)
+        
+        semester_number = int(data.get('semester_number'))
+        start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d').date()
+        end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d').date()
+        registration_deadline = datetime.strptime(data.get('registration_deadline'), '%Y-%m-%d').date()
+        is_current = data.get('is_current', False)
+        
+        # Validation
+        if start_date >= end_date:
+            return JsonResponse({'success': False, 'message': 'End date must be after start date'}, status=400)
+        
+        if registration_deadline > start_date:
+            return JsonResponse({'success': False, 'message': 'Registration deadline must be before start date'}, status=400)
+        
+        # Check if semester number already exists (excluding current)
+        if Semester.objects.filter(
+            academic_year=semester.academic_year,
+            semester_number=semester_number
+        ).exclude(id=semester_id).exists():
+            return JsonResponse({'success': False, 'message': 'Semester number already exists for this academic year'}, status=400)
+        
+        # If marking as current, unset other current semesters
+        if is_current:
+            Semester.objects.filter(is_current=True).exclude(id=semester_id).update(is_current=False)
+        
+        semester.semester_number = semester_number
+        semester.start_date = start_date
+        semester.end_date = end_date
+        semester.registration_deadline = registration_deadline
+        semester.is_current = is_current
+        semester.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Semester updated successfully',
+            'data': {
+                'id': semester.id,
+                'semester_number': semester.semester_number,
+                'semester_display': semester.get_semester_number_display(),
+                'start_date': semester.start_date.strftime('%Y-%m-%d'),
+                'end_date': semester.end_date.strftime('%Y-%m-%d'),
+                'registration_deadline': semester.registration_deadline.strftime('%Y-%m-%d'),
+                'is_current': semester.is_current,
+            }
+        })
+    except Semester.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Semester not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_semester(request, semester_id):
+    """Delete semester"""
+    try:
+        semester = get_object_or_404(Semester, id=semester_id)
+        
+        # Check if there are related records
+        if semester.enrollments.exists() or semester.registrations.exists():
+            return JsonResponse({
+                'success': False,
+                'message': 'Cannot delete semester with existing enrollments or registrations.'
+            }, status=400)
+        
+        semester.delete()
+        return JsonResponse({'success': True, 'message': 'Semester deleted successfully'})
+    except Semester.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Semester not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
