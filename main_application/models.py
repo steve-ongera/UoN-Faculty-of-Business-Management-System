@@ -687,3 +687,383 @@ class MessageReadStatus(models.Model):
     
     def __str__(self):
         return
+    
+
+# Add these models to your existing models.py file
+
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
+import json
+
+# ========================
+# SECURITY & AUDIT TRAIL
+# ========================
+
+class AuditLog(models.Model):
+    """Comprehensive audit trail for all system actions"""
+    ACTION_TYPES = (
+        ('CREATE', 'Create'),
+        ('UPDATE', 'Update'),
+        ('DELETE', 'Delete'),
+        ('VIEW', 'View'),
+        ('LOGIN', 'Login'),
+        ('LOGOUT', 'Logout'),
+        ('LOGIN_FAILED', 'Login Failed'),
+        ('PASSWORD_CHANGE', 'Password Change'),
+        ('PASSWORD_RESET', 'Password Reset'),
+        ('PERMISSION_CHANGE', 'Permission Change'),
+        ('EXPORT', 'Data Export'),
+        ('IMPORT', 'Data Import'),
+        ('BULK_ACTION', 'Bulk Action'),
+    )
+    
+    SEVERITY_LEVELS = (
+        ('LOW', 'Low'),
+        ('MEDIUM', 'Medium'),
+        ('HIGH', 'High'),
+        ('CRITICAL', 'Critical'),
+    )
+    
+    # Who performed the action
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, 
+                             related_name='audit_logs')
+    user_type = models.CharField(max_length=20, blank=True)
+    username = models.CharField(max_length=150)  # Store username in case user is deleted
+    
+    # What action was performed
+    action_type = models.CharField(max_length=30, choices=ACTION_TYPES)
+    action_description = models.TextField()
+    
+    # What was affected (Generic relation to any model)
+    content_type = models.ForeignKey(ContentType, on_delete=models.SET_NULL, 
+                                     null=True, blank=True)
+    object_id = models.PositiveIntegerField(null=True, blank=True)
+    content_object = GenericForeignKey('content_type', 'object_id')
+    
+    # Additional details
+    model_name = models.CharField(max_length=100, blank=True)
+    object_repr = models.CharField(max_length=200, blank=True)  # String representation of object
+    
+    # Changes made
+    old_values = models.JSONField(null=True, blank=True)  # Previous state
+    new_values = models.JSONField(null=True, blank=True)  # New state
+    changes_summary = models.TextField(blank=True)
+    
+    # Request information
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    request_path = models.CharField(max_length=500, blank=True)
+    request_method = models.CharField(max_length=10, blank=True)  # GET, POST, PUT, DELETE
+    
+    # Timestamp
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # Severity for security monitoring
+    severity = models.CharField(max_length=20, choices=SEVERITY_LEVELS, default='LOW')
+    is_suspicious = models.BooleanField(default=False)
+    
+    class Meta:
+        db_table = 'audit_logs'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', '-timestamp']),
+            models.Index(fields=['action_type', '-timestamp']),
+            models.Index(fields=['content_type', 'object_id']),
+            models.Index(fields=['-timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.username} - {self.action_type} - {self.timestamp}"
+
+
+class SecurityEvent(models.Model):
+    """Track security-related events and threats"""
+    EVENT_TYPES = (
+        ('BRUTE_FORCE', 'Brute Force Attack'),
+        ('UNAUTHORIZED_ACCESS', 'Unauthorized Access Attempt'),
+        ('SUSPICIOUS_ACTIVITY', 'Suspicious Activity'),
+        ('DATA_BREACH_ATTEMPT', 'Data Breach Attempt'),
+        ('SQL_INJECTION', 'SQL Injection Attempt'),
+        ('XSS_ATTEMPT', 'XSS Attack Attempt'),
+        ('CSRF_VIOLATION', 'CSRF Violation'),
+        ('RATE_LIMIT_EXCEEDED', 'Rate Limit Exceeded'),
+        ('PRIVILEGE_ESCALATION', 'Privilege Escalation Attempt'),
+        ('MASS_DATA_EXPORT', 'Mass Data Export'),
+        ('UNUSUAL_BEHAVIOR', 'Unusual User Behavior'),
+    )
+    
+    RISK_LEVELS = (
+        ('LOW', 'Low Risk'),
+        ('MEDIUM', 'Medium Risk'),
+        ('HIGH', 'High Risk'),
+        ('CRITICAL', 'Critical Risk'),
+    )
+    
+    STATUS_CHOICES = (
+        ('DETECTED', 'Detected'),
+        ('INVESTIGATING', 'Under Investigation'),
+        ('RESOLVED', 'Resolved'),
+        ('FALSE_POSITIVE', 'False Positive'),
+        ('IGNORED', 'Ignored'),
+    )
+    
+    event_type = models.CharField(max_length=30, choices=EVENT_TYPES)
+    risk_level = models.CharField(max_length=20, choices=RISK_LEVELS)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DETECTED')
+    
+    # User involved (if any)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='security_events')
+    username = models.CharField(max_length=150, blank=True)
+    
+    # Event details
+    description = models.TextField()
+    details = models.JSONField(null=True, blank=True)
+    
+    # Request information
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    request_path = models.CharField(max_length=500, blank=True)
+    request_data = models.TextField(blank=True)  # Request payload if relevant
+    
+    # Timestamps
+    detected_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    
+    # Response actions
+    action_taken = models.TextField(blank=True)
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='resolved_security_events')
+    
+    # Auto-blocking
+    auto_blocked = models.BooleanField(default=False)
+    block_duration_minutes = models.IntegerField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'security_events'
+        ordering = ['-detected_at']
+        indexes = [
+            models.Index(fields=['event_type', '-detected_at']),
+            models.Index(fields=['risk_level', 'status']),
+            models.Index(fields=['ip_address', '-detected_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.event_type} - {self.risk_level} - {self.detected_at}"
+
+
+class LoginAttempt(models.Model):
+    """Track all login attempts (successful and failed)"""
+    username = models.CharField(max_length=150, db_index=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='login_attempts')
+    
+    # Attempt details
+    success = models.BooleanField(default=False)
+    failure_reason = models.CharField(max_length=200, blank=True)
+    
+    # Request information
+    ip_address = models.GenericIPAddressField(db_index=True)
+    user_agent = models.TextField(blank=True)
+    
+    # Location data (if available)
+    country = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    
+    # Timestamp
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # Session tracking
+    session_key = models.CharField(max_length=40, blank=True)
+    
+    class Meta:
+        db_table = 'login_attempts'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['username', '-timestamp']),
+            models.Index(fields=['ip_address', '-timestamp']),
+            models.Index(fields=['success', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        status = "Success" if self.success else "Failed"
+        return f"{self.username} - {status} - {self.timestamp}"
+
+
+class UserSession(models.Model):
+    """Track active user sessions"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    session_key = models.CharField(max_length=40, unique=True, db_index=True)
+    
+    # Session information
+    ip_address = models.GenericIPAddressField()
+    user_agent = models.TextField(blank=True)
+    device_type = models.CharField(max_length=50, blank=True)  # Mobile, Desktop, Tablet
+    browser = models.CharField(max_length=100, blank=True)
+    os = models.CharField(max_length=100, blank=True)
+    
+    # Timestamps
+    login_time = models.DateTimeField(auto_now_add=True)
+    last_activity = models.DateTimeField(auto_now=True)
+    logout_time = models.DateTimeField(null=True, blank=True)
+    
+    # Session status
+    is_active = models.BooleanField(default=True)
+    
+    # Location
+    country = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    
+    class Meta:
+        db_table = 'user_sessions'
+        ordering = ['-login_time']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['session_key']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.ip_address} - {self.login_time}"
+
+
+class SystemSettings(models.Model):
+    """System-wide settings including maintenance mode"""
+    # Maintenance mode
+    maintenance_mode = models.BooleanField(default=False)
+    maintenance_message = models.TextField(default="System is currently under maintenance. Please check back later.")
+    maintenance_started_at = models.DateTimeField(null=True, blank=True)
+    maintenance_started_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                                related_name='maintenance_activations')
+    
+    # Security settings
+    max_login_attempts = models.IntegerField(default=5)
+    lockout_duration_minutes = models.IntegerField(default=30)
+    session_timeout_minutes = models.IntegerField(default=60)
+    require_password_change_days = models.IntegerField(default=90)
+    
+    # Rate limiting
+    api_rate_limit_per_minute = models.IntegerField(default=60)
+    enable_rate_limiting = models.BooleanField(default=True)
+    
+    # Audit settings
+    enable_audit_logging = models.BooleanField(default=True)
+    audit_log_retention_days = models.IntegerField(default=365)
+    log_view_actions = models.BooleanField(default=False)  # Log view operations (creates many logs)
+    
+    # Security features
+    enable_two_factor_auth = models.BooleanField(default=False)
+    enable_ip_whitelist = models.BooleanField(default=False)
+    whitelist_ips = models.TextField(blank=True, help_text="Comma-separated IP addresses")
+    
+    # Notifications
+    security_alert_emails = models.TextField(blank=True, help_text="Comma-separated email addresses for security alerts")
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='settings_updates')
+    
+    class Meta:
+        db_table = 'system_settings'
+        verbose_name = 'System Settings'
+        verbose_name_plural = 'System Settings'
+    
+    def __str__(self):
+        return f"System Settings (Updated: {self.updated_at})"
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one settings record exists
+        if not self.pk and SystemSettings.objects.exists():
+            raise ValueError('SystemSettings instance already exists')
+        return super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_settings(cls):
+        """Get or create system settings"""
+        settings, created = cls.objects.get_or_create(pk=1)
+        return settings
+
+
+class BlockedIP(models.Model):
+    """Track blocked IP addresses"""
+    BLOCK_REASONS = (
+        ('BRUTE_FORCE', 'Brute Force Attack'),
+        ('SUSPICIOUS_ACTIVITY', 'Suspicious Activity'),
+        ('MANUAL_BLOCK', 'Manual Block'),
+        ('AUTOMATED_BLOCK', 'Automated Block'),
+    )
+    
+    ip_address = models.GenericIPAddressField(unique=True, db_index=True)
+    reason = models.CharField(max_length=30, choices=BLOCK_REASONS)
+    description = models.TextField(blank=True)
+    
+    # Block details
+    blocked_at = models.DateTimeField(auto_now_add=True)
+    blocked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='blocked_ips')
+    blocked_until = models.DateTimeField(null=True, blank=True)  # Null = permanent
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    unblocked_at = models.DateTimeField(null=True, blank=True)
+    unblocked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='unblocked_ips')
+    
+    # Statistics
+    block_count = models.IntegerField(default=1)  # How many times this IP has been blocked
+    
+    class Meta:
+        db_table = 'blocked_ips'
+        ordering = ['-blocked_at']
+        indexes = [
+            models.Index(fields=['ip_address', 'is_active']),
+            models.Index(fields=['-blocked_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.ip_address} - {self.reason}"
+    
+    def is_blocked(self):
+        """Check if IP is currently blocked"""
+        if not self.is_active:
+            return False
+        if self.blocked_until is None:
+            return True
+        return timezone.now() < self.blocked_until
+
+
+class DataExportLog(models.Model):
+    """Track data exports for compliance and security"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='data_exports')
+    
+    # Export details
+    export_type = models.CharField(max_length=100)  # Students, Marks, Financial, etc.
+    model_name = models.CharField(max_length=100)
+    record_count = models.IntegerField()
+    
+    # Export parameters
+    filters_applied = models.JSONField(null=True, blank=True)
+    fields_exported = models.JSONField(null=True, blank=True)
+    
+    # File information
+    file_format = models.CharField(max_length=20)  # CSV, Excel, PDF
+    file_size_bytes = models.BigIntegerField(null=True, blank=True)
+    
+    # Request information
+    ip_address = models.GenericIPAddressField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    # Security
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='approved_exports')
+    
+    class Meta:
+        db_table = 'data_export_logs'
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.export_type} - {self.timestamp}"
