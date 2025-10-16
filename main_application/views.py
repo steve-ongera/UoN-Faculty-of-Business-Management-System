@@ -6256,3 +6256,383 @@ def create_user_view(request):
         'year_levels': Student.YEAR_LEVELS,
     }
     return render(request, 'admin/create_user.html', context)
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDate, TruncHour
+from django.utils import timezone
+from datetime import timedelta, datetime
+from django.core.paginator import Paginator
+from .models import (
+    AuditLog, SecurityEvent, LoginAttempt, UserSession, 
+    SystemSettings, BlockedIP, DataExportLog, User
+)
+import json
+
+def is_admin(user):
+    """Check if user is admin/ICT admin"""
+    return user.is_superuser or user.user_type == 'ICT_ADMIN'
+
+
+@login_required
+@user_passes_test(is_admin)
+def security_dashboard(request):
+    """Main security dashboard view"""
+    settings = SystemSettings.get_settings()
+    
+    # Get date range for statistics (last 30 days by default)
+    end_date = timezone.now()
+    start_date = end_date - timedelta(days=30)
+    
+    # Basic statistics
+    context = {
+        'settings': settings,
+        'total_users': User.objects.count(),
+        'active_sessions': UserSession.objects.filter(is_active=True).count(),
+        'failed_logins_today': LoginAttempt.objects.filter(
+            success=False,
+            timestamp__date=timezone.now().date()
+        ).count(),
+        'security_events_today': SecurityEvent.objects.filter(
+            detected_at__date=timezone.now().date()
+        ).count(),
+        'blocked_ips': BlockedIP.objects.filter(is_active=True).count(),
+        'critical_events': SecurityEvent.objects.filter(
+            risk_level='CRITICAL',
+            status__in=['DETECTED', 'INVESTIGATING']
+        ).count(),
+    }
+    
+    return render(request, 'admin/security_dashboard.html', context)
+
+
+@login_required
+@user_passes_test(is_admin)
+def get_realtime_metrics(request):
+    """AJAX endpoint for real-time metrics"""
+    now = timezone.now()
+    
+    # Active users (logged in within last 5 minutes)
+    active_users = UserSession.objects.filter(
+        is_active=True,
+        last_activity__gte=now - timedelta(minutes=5)
+    ).count()
+    
+    # Failed login attempts (last hour)
+    failed_logins_hour = LoginAttempt.objects.filter(
+        success=False,
+        timestamp__gte=now - timedelta(hours=1)
+    ).count()
+    
+    # Security events (last hour)
+    security_events_hour = SecurityEvent.objects.filter(
+        detected_at__gte=now - timedelta(hours=1)
+    ).count()
+    
+    # Critical events (unresolved)
+    critical_events = SecurityEvent.objects.filter(
+        risk_level='CRITICAL',
+        status__in=['DETECTED', 'INVESTIGATING']
+    ).count()
+    
+    # Recent audit logs (last 10)
+    recent_audits = AuditLog.objects.select_related('user').order_by('-timestamp')[:10]
+    audit_list = [{
+        'user': audit.username,
+        'action': audit.get_action_type_display(),
+        'description': audit.action_description,
+        'timestamp': audit.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+        'severity': audit.severity
+    } for audit in recent_audits]
+    
+    return JsonResponse({
+        'success': True,
+        'metrics': {
+            'active_users': active_users,
+            'failed_logins_hour': failed_logins_hour,
+            'security_events_hour': security_events_hour,
+            'critical_events': critical_events,
+        },
+        'recent_audits': audit_list,
+        'timestamp': now.strftime('%Y-%m-%d %H:%M:%S')
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def get_login_activity_chart(request):
+    """AJAX endpoint for login activity chart data"""
+    days = int(request.GET.get('days', 7))
+    end_date = timezone.now()
+    start_date = end_date - timedelta(days=days)
+    
+    # Get login attempts grouped by date
+    login_data = LoginAttempt.objects.filter(
+        timestamp__gte=start_date
+    ).extra(
+        select={'date': 'DATE(timestamp)'}
+    ).values('date', 'success').annotate(
+        count=Count('id')
+    ).order_by('date')
+    
+    # Organize data for chart
+    dates = []
+    successful = []
+    failed = []
+    
+    current_date = start_date.date()
+    while current_date <= end_date.date():
+        dates.append(current_date.strftime('%Y-%m-%d'))
+        
+        success_count = sum(item['count'] for item in login_data 
+                          if item['date'] == current_date and item['success'])
+        fail_count = sum(item['count'] for item in login_data 
+                       if item['date'] == current_date and not item['success'])
+        
+        successful.append(success_count)
+        failed.append(fail_count)
+        
+        current_date += timedelta(days=1)
+    
+    return JsonResponse({
+        'success': True,
+        'labels': dates,
+        'datasets': [
+            {
+                'label': 'Successful Logins',
+                'data': successful,
+                'borderColor': '#10B981',
+                'backgroundColor': 'rgba(16, 185, 129, 0.1)',
+            },
+            {
+                'label': 'Failed Logins',
+                'data': failed,
+                'borderColor': '#EF4444',
+                'backgroundColor': 'rgba(239, 68, 68, 0.1)',
+            }
+        ]
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def get_user_activity_chart(request):
+    """AJAX endpoint for user activity by type"""
+    days = int(request.GET.get('days', 7))
+    end_date = timezone.now()
+    start_date = end_date - timedelta(days=days)
+    
+    # Get activity by user type
+    user_activity = AuditLog.objects.filter(
+        timestamp__gte=start_date
+    ).values('user_type').annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    labels = []
+    data = []
+    colors = []
+    
+    color_map = {
+        'STUDENT': '#3B82F6',
+        'LECTURER': '#10B981',
+        'COD': '#F59E0B',
+        'DEAN': '#8B5CF6',
+        'ICT_ADMIN': '#EF4444',
+    }
+    
+    for item in user_activity:
+        if item['user_type']:
+            labels.append(item['user_type'])
+            data.append(item['count'])
+            colors.append(color_map.get(item['user_type'], '#64748B'))
+    
+    return JsonResponse({
+        'success': True,
+        'labels': labels,
+        'datasets': [{
+            'data': data,
+            'backgroundColor': colors,
+        }]
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def get_security_events_chart(request):
+    """AJAX endpoint for security events by risk level"""
+    days = int(request.GET.get('days', 30))
+    end_date = timezone.now()
+    start_date = end_date - timedelta(days=days)
+    
+    # Get security events by risk level
+    events = SecurityEvent.objects.filter(
+        detected_at__gte=start_date
+    ).values('risk_level').annotate(
+        count=Count('id')
+    ).order_by('risk_level')
+    
+    risk_order = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+    labels = []
+    data = []
+    colors = ['#10B981', '#F59E0B', '#EF4444', '#7C3AED']
+    
+    for risk in risk_order:
+        event = next((e for e in events if e['risk_level'] == risk), None)
+        labels.append(risk)
+        data.append(event['count'] if event else 0)
+    
+    return JsonResponse({
+        'success': True,
+        'labels': labels,
+        'datasets': [{
+            'label': 'Security Events',
+            'data': data,
+            'backgroundColor': colors,
+        }]
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def toggle_maintenance_mode(request):
+    """AJAX endpoint to toggle maintenance mode"""
+    if request.method == 'POST':
+        settings = SystemSettings.get_settings()
+        data = json.loads(request.body)
+        
+        enable = data.get('enable', False)
+        message = data.get('message', 'System is currently under maintenance.')
+        
+        settings.maintenance_mode = enable
+        settings.maintenance_message = message
+        settings.updated_by = request.user
+        
+        if enable:
+            settings.maintenance_started_at = timezone.now()
+            settings.maintenance_started_by = request.user
+        
+        settings.save()
+        
+        # Log the action
+        AuditLog.objects.create(
+            user=request.user,
+            user_type=request.user.user_type,
+            username=request.user.username,
+            action_type='UPDATE',
+            action_description=f"Maintenance mode {'enabled' if enable else 'disabled'}",
+            model_name='SystemSettings',
+            ip_address=get_client_ip(request),
+            severity='HIGH'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': f"Maintenance mode {'enabled' if enable else 'disabled'} successfully",
+            'maintenance_mode': enable
+        })
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+
+
+@login_required
+@user_passes_test(is_admin)
+def update_security_settings(request):
+    """AJAX endpoint to update security settings"""
+    if request.method == 'POST':
+        settings = SystemSettings.get_settings()
+        data = json.loads(request.body)
+        
+        # Update settings
+        settings.max_login_attempts = int(data.get('max_login_attempts', 5))
+        settings.lockout_duration_minutes = int(data.get('lockout_duration_minutes', 30))
+        settings.session_timeout_minutes = int(data.get('session_timeout_minutes', 60))
+        settings.enable_audit_logging = data.get('enable_audit_logging', True)
+        settings.log_view_actions = data.get('log_view_actions', False)
+        settings.updated_by = request.user
+        settings.save()
+        
+        # Log the action
+        AuditLog.objects.create(
+            user=request.user,
+            user_type=request.user.user_type,
+            username=request.user.username,
+            action_type='UPDATE',
+            action_description="Security settings updated",
+            model_name='SystemSettings',
+            new_values=data,
+            ip_address=get_client_ip(request),
+            severity='HIGH'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Security settings updated successfully'
+        })
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+
+
+@login_required
+@user_passes_test(is_admin)
+def get_audit_logs(request):
+    """AJAX endpoint to fetch audit logs with filters"""
+    page = int(request.GET.get('page', 1))
+    per_page = int(request.GET.get('per_page', 50))
+    
+    # Filters
+    user_type = request.GET.get('user_type', '')
+    action_type = request.GET.get('action_type', '')
+    severity = request.GET.get('severity', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    search = request.GET.get('search', '')
+    
+    # Build query
+    logs = AuditLog.objects.select_related('user').all()
+    
+    if user_type:
+        logs = logs.filter(user_type=user_type)
+    if action_type:
+        logs = logs.filter(action_type=action_type)
+    if severity:
+        logs = logs.filter(severity=severity)
+    if date_from:
+        logs = logs.filter(timestamp__gte=date_from)
+    if date_to:
+        logs = logs.filter(timestamp__lte=date_to)
+    if search:
+        logs = logs.filter(
+            Q(username__icontains=search) |
+            Q(action_description__icontains=search) |
+            Q(model_name__icontains=search)
+        )
+    
+    # Paginate
+    paginator = Paginator(logs, per_page)
+    page_obj = paginator.get_page(page)
+    
+    # Serialize data
+    logs_data = [{
+        'id': log.id,
+        'username': log.username,
+        'user_type': log.user_type,
+        'action_type': log.get_action_type_display(),
+        'action_description': log.action_description,
+        'model_name': log.model_name,
+        'ip_address': log.ip_address,
+        'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+        'severity': log.severity,
+    } for log in page_obj]
+    
+    return JsonResponse({
+        'success': True,
+        'logs': logs_data,
+        'pagination': {
+            'current_page': page,
+            'total_pages': paginator,
+        }
+        })
