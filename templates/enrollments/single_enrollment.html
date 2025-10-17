@@ -1,0 +1,644 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Single Student Enrollment{% endblock %}
+
+{% block page_title %}Single Student Enrollment{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .enrollment-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .form-card {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        border: 1px solid #f0f0f0;
+    }
+
+    .form-section {
+        margin-bottom: 30px;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #F1F5F9;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        font-size: 14px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 8px;
+    }
+
+    .form-group label .required {
+        color: #EF4444;
+    }
+
+    .form-control {
+        padding: 12px 15px;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    select.form-control {
+        cursor: pointer;
+    }
+
+    .student-info-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: none;
+    }
+
+    .student-info-box.show {
+        display: block;
+    }
+
+    .student-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .detail-label {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-bottom: 3px;
+    }
+
+    .detail-value {
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    .units-section {
+        background: #F8FAFC;
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 20px;
+    }
+
+    .units-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .unit-checkbox {
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        border: 2px solid #E2E8F0;
+        transition: all 0.2s;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .unit-checkbox:hover {
+        border-color: #4F46E5;
+        background: #F8FAFC;
+    }
+
+    .unit-checkbox input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .unit-info {
+        flex: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .unit-name {
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    .unit-code {
+        color: #4F46E5;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .unit-meta {
+        display: flex;
+        gap: 15px;
+        font-size: 13px;
+        color: #64748B;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-mandatory {
+        background: #DBEAFE;
+        color: #1E40AF;
+    }
+
+    .badge-elective {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+
+    .conflict-alert {
+        background: #FEF3C7;
+        border: 1px solid #FCD34D;
+        color: #92400E;
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 15px;
+        display: none;
+    }
+
+    .conflict-alert.show {
+        display: block;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+    }
+
+    .btn-primary:disabled {
+        background: #CBD5E1;
+        cursor: not-allowed;
+    }
+
+    .btn-secondary {
+        background: #64748B;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #475569;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid #F1F5F9;
+    }
+
+    .loading-spinner {
+        display: none;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #4F46E5;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .empty-units {
+        text-align: center;
+        padding: 40px 20px;
+        color: #64748B;
+    }
+
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'enrollment_list' %}">Enrollment Management</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Single Enrollment</li>
+    </ol>
+</nav>
+
+<div class="enrollment-container">
+    <div class="form-card">
+        <h2 style="margin: 0 0 10px 0; color: #1E293B;">
+            <i class="bi bi-person-plus"></i> Enroll Single Student
+        </h2>
+        <p style="color: #64748B; margin-bottom: 30px;">Select a student, semester, and units to enroll.</p>
+
+        <form method="post" id="enrollmentForm">
+            {% csrf_token %}
+
+            <!-- Student Selection -->
+            <div class="form-section">
+                <h3 class="section-title">
+                    <i class="bi bi-person"></i>
+                    Student Information
+                </h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="student">
+                            Select Student <span class="required">*</span>
+                        </label>
+                        <select id="student" name="student" class="form-control" required>
+                            <option value="">-- Choose Student --</option>
+                            {% for student in students %}
+                            <option value="{{ student.user.id }}" 
+                                    data-reg="{{ student.registration_number }}"
+                                    data-name="{{ student.first_name }} {{ student.last_name }}"
+                                    data-programme="{{ student.programme.code }} - {{ student.programme.name }}"
+                                    data-year="{{ student.current_year }}">
+                                {{ student.registration_number }} - {{ student.first_name }} {{ student.last_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="semester">
+                            Select Semester <span class="required">*</span>
+                        </label>
+                        <select id="semester" name="semester" class="form-control" required>
+                            <option value="">-- Choose Semester --</option>
+                            {% for semester in semesters %}
+                            <option value="{{ semester.id }}"
+                                    data-semester-num="{{ semester.semester_number }}">
+                                {{ semester.academic_year.year_code }} - Semester {{ semester.semester_number }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Student Info Display -->
+                <div id="studentInfoBox" class="student-info-box">
+                    <h4 style="margin: 0 0 15px 0;">Selected Student Details</h4>
+                    <div class="student-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Registration Number</span>
+                            <span class="detail-value" id="displayReg">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Student Name</span>
+                            <span class="detail-value" id="displayName">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Programme</span>
+                            <span class="detail-value" id="displayProgramme">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Year Level</span>
+                            <span class="detail-value" id="displayYear">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Units Selection -->
+            <div class="form-section">
+                <h3 class="section-title">
+                    <i class="bi bi-journal-text"></i>
+                    Select Units to Enroll
+                </h3>
+                <div id="unitsSection" class="units-section">
+                    <p style="color: #64748B; margin: 0;">
+                        <i class="bi bi-info-circle"></i> Select a student and semester to see available units
+                    </p>
+                    <div id="unitsGrid" class="units-grid"></div>
+                    <div id="emptyUnits" class="empty-units" style="display: none;">
+                        <i class="bi bi-inbox" style="font-size: 48px; opacity: 0.3;"></i>
+                        <p>No units available for the selected criteria</p>
+                    </div>
+                </div>
+
+                <!-- Conflict Alert -->
+                <div id="conflictAlert" class="conflict-alert">
+                    <strong><i class="bi bi-exclamation-triangle"></i> Enrollment Conflicts Detected</strong>
+                    <ul id="conflictList" style="margin: 10px 0 0 20px;"></ul>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+                <a href="{% url 'enrollment_list' %}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </a>
+                <button type="submit" id="submitBtn" class="btn btn-primary" disabled>
+                    <span class="loading-spinner" id="loadingSpinner"></span>
+                    <i class="bi bi-check-circle"></i> Enroll Student
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let selectedProgrammeId = null;
+    let selectedYearLevel = null;
+    let selectedSemesterNum = null;
+
+    // Student selection change
+    document.getElementById('student').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        
+        if (this.value) {
+            // Get student data from the select option
+            const regNumber = this.options[this.selectedIndex].getAttribute('data-reg');
+            const studentName = this.options[this.selectedIndex].getAttribute('data-name');
+            const programme = this.options[this.selectedIndex].getAttribute('data-programme');
+            const year = this.options[this.selectedIndex].getAttribute('data-year');
+            
+            // Display student info
+            document.getElementById('displayReg').textContent = regNumber;
+            document.getElementById('displayName').textContent = studentName;
+            document.getElementById('displayProgramme').textContent = programme;
+            document.getElementById('displayYear').textContent = 'Year ' + year;
+            document.getElementById('studentInfoBox').classList.add('show');
+            
+            // Find the student's programme ID
+            {% for student in students %}
+            if ('{{ student.user.id }}' === this.value) {
+                selectedProgrammeId = '{{ student.programme.id }}';
+                selectedYearLevel = '{{ student.current_year }}';
+            }
+            {% endfor %}
+            
+            loadUnits();
+        } else {
+            document.getElementById('studentInfoBox').classList.remove('show');
+            selectedProgrammeId = null;
+            selectedYearLevel = null;
+            clearUnits();
+        }
+    });
+
+    // Semester selection change
+    document.getElementById('semester').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (this.value) {
+            selectedSemesterNum = selectedOption.getAttribute('data-semester-num');
+            loadUnits();
+        } else {
+            selectedSemesterNum = null;
+            clearUnits();
+        }
+    });
+
+    // Load units based on programme and year
+    function loadUnits() {
+        if (!selectedProgrammeId || !selectedYearLevel) {
+            return;
+        }
+
+        // Build URL with parameters
+        let url = "{% url 'get_programme_units' %}?programme_id=" + selectedProgrammeId + 
+                  "&year_level=" + selectedYearLevel;
+        
+        if (selectedSemesterNum) {
+            url += "&semester_number=" + selectedSemesterNum;
+        }
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                displayUnits(data.units);
+                checkConflicts();
+            })
+            .catch(error => {
+                console.error('Error loading units:', error);
+            });
+    }
+
+    // Display units in checkboxes
+    function displayUnits(units) {
+        const unitsGrid = document.getElementById('unitsGrid');
+        const emptyUnits = document.getElementById('emptyUnits');
+        
+        if (units.length === 0) {
+            unitsGrid.innerHTML = '';
+            emptyUnits.style.display = 'block';
+            document.getElementById('submitBtn').disabled = true;
+            return;
+        }
+
+        emptyUnits.style.display = 'none';
+        let html = '';
+        
+        units.forEach(unit => {
+            html += `
+                <label class="unit-checkbox">
+                    <input type="checkbox" name="units" value="${unit.id}" onchange="updateSubmitButton()">
+                    <div class="unit-info">
+                        <div>
+                            <div class="unit-name">${unit.name}</div>
+                            <div style="margin-top: 3px;">
+                                <span class="unit-code">${unit.code}</span>
+                            </div>
+                        </div>
+                        <div class="unit-meta">
+                            <span><i class="bi bi-award"></i> ${unit.credits} Credits</span>
+                            <span><i class="bi bi-calendar"></i> Sem ${unit.semester}</span>
+                            <span class="badge ${unit.is_mandatory ? 'badge-mandatory' : 'badge-elective'}">
+                                ${unit.is_mandatory ? 'Mandatory' : 'Elective'}
+                            </span>
+                        </div>
+                    </div>
+                </label>
+            `;
+        });
+        
+        unitsGrid.innerHTML = html;
+        updateSubmitButton();
+    }
+
+    // Clear units display
+    function clearUnits() {
+        document.getElementById('unitsGrid').innerHTML = '';
+        document.getElementById('emptyUnits').style.display = 'none';
+        document.getElementById('submitBtn').disabled = true;
+    }
+
+    // Update submit button state
+    function updateSubmitButton() {
+        const studentSelected = document.getElementById('student').value;
+        const semesterSelected = document.getElementById('semester').value;
+        const unitsSelected = document.querySelectorAll('input[name="units"]:checked').length > 0;
+        
+        document.getElementById('submitBtn').disabled = !(studentSelected && semesterSelected && unitsSelected);
+    }
+
+    // Check for enrollment conflicts
+    function checkConflicts() {
+        const studentId = document.getElementById('student').value;
+        const semesterId = document.getElementById('semester').value;
+        
+        if (!studentId || !semesterId) return;
+
+        const selectedUnits = Array.from(document.querySelectorAll('input[name="units"]:checked'))
+            .map(cb => cb.value);
+        
+        if (selectedUnits.length === 0) return;
+
+        fetch(`{% url 'check_enrollment_conflicts' %}?student_id=${studentId}&semester_id=${semesterId}&${selectedUnits.map(id => 'unit_ids[]=' + id).join('&')}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.conflicts.length > 0) {
+                    displayConflicts(data.conflicts);
+                } else {
+                    document.getElementById('conflictAlert').classList.remove('show');
+                }
+            });
+    }
+
+    // Display conflicts
+    function displayConflicts(conflicts) {
+        const conflictList = document.getElementById('conflictList');
+        let html = '';
+        
+        conflicts.forEach(conflict => {
+            html += `<li>${conflict.unit_code} - ${conflict.unit_name} (${conflict.status})</li>`;
+        });
+        
+        conflictList.innerHTML = html;
+        document.getElementById('conflictAlert').classList.add('show');
+    }
+
+    // Form submission
+    document.getElementById('enrollmentForm').addEventListener('submit', function(e) {
+        const submitBtn = document.getElementById('submitBtn');
+        const spinner = document.getElementById('loadingSpinner');
+        
+        submitBtn.disabled = true;
+        spinner.style.display = 'inline-block';
+    });
+
+    // Listen for unit checkbox changes to check conflicts
+    document.addEventListener('change', function(e) {
+        if (e.target.name === 'units') {
+            checkConflicts();
+        }
+    });
+
+    console.log('Single enrollment form loaded');
+</script>
+{% endblock %}

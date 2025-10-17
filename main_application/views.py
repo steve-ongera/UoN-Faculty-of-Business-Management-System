@@ -8741,3 +8741,499 @@ def export_to_excel(students, enrollments_filter, academic_year_id, unit_id):
     response['Content-Disposition'] = 'attachment; filename="student_progression.xlsx"'
     
     return response
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.db.models import Q, Count
+from django.http import JsonResponse
+from django.core.paginator import Paginator
+from django.db import transaction
+from .models import (
+    Student, UnitEnrollment, Unit, Semester, Programme, 
+    AcademicYear, ProgrammeUnit, SemesterRegistration
+)
+from datetime import datetime
+
+
+# ========================
+# ENROLLMENT LIST VIEW
+# ========================
+
+@login_required
+def enrollment_list(request):
+    """
+    Display all enrollments with filtering options
+    """
+    # Get filter parameters
+    search_query = request.GET.get('search', '')
+    programme_id = request.GET.get('programme', '')
+    semester_id = request.GET.get('semester', '')
+    unit_id = request.GET.get('unit', '')
+    status = request.GET.get('status', '')
+    year_level = request.GET.get('year', '')
+    
+    # Base queryset
+    enrollments = UnitEnrollment.objects.select_related(
+        'student', 'student__programme', 'unit', 'semester', 'semester__academic_year'
+    ).all().order_by('-enrollment_date')
+    
+    # Apply filters
+    if search_query:
+        enrollments = enrollments.filter(
+            Q(student__registration_number__icontains=search_query) |
+            Q(student__first_name__icontains=search_query) |
+            Q(student__last_name__icontains=search_query) |
+            Q(unit__code__icontains=search_query) |
+            Q(unit__name__icontains=search_query)
+        )
+    
+    if programme_id:
+        enrollments = enrollments.filter(student__programme_id=programme_id)
+    
+    if semester_id:
+        enrollments = enrollments.filter(semester_id=semester_id)
+    
+    if unit_id:
+        enrollments = enrollments.filter(unit_id=unit_id)
+    
+    if status:
+        enrollments = enrollments.filter(status=status)
+    
+    if year_level:
+        enrollments = enrollments.filter(student__current_year=year_level)
+    
+    # Pagination
+    paginator = Paginator(enrollments, 25)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Get filter options
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    semesters = Semester.objects.select_related('academic_year').order_by('-academic_year__start_date', '-semester_number')
+    units = Unit.objects.all().order_by('code')
+    
+    # Get statistics
+    total_enrollments = enrollments.count()
+    enrolled_count = enrollments.filter(status='ENROLLED').count()
+    completed_count = enrollments.filter(status='COMPLETED').count()
+    dropped_count = enrollments.filter(status='DROPPED').count()
+    
+    context = {
+        'page_obj': page_obj,
+        'programmes': programmes,
+        'semesters': semesters,
+        'units': units,
+        'search_query': search_query,
+        'selected_programme': programme_id,
+        'selected_semester': semester_id,
+        'selected_unit': unit_id,
+        'selected_status': status,
+        'selected_year': year_level,
+        'total_enrollments': total_enrollments,
+        'enrolled_count': enrolled_count,
+        'completed_count': completed_count,
+        'dropped_count': dropped_count,
+    }
+    
+    return render(request, 'enrollments/enrollment_list.html', context)
+
+
+# ========================
+# SINGLE ENROLLMENT
+# ========================
+
+@login_required
+def single_enrollment(request):
+    """
+    Enroll a single student in units
+    """
+    if request.method == 'POST':
+        student_id = request.POST.get('student')
+        semester_id = request.POST.get('semester')
+        unit_ids = request.POST.getlist('units')
+        
+        try:
+            student = Student.objects.get(user_id=student_id)
+            semester = Semester.objects.get(id=semester_id)
+            
+            enrolled_count = 0
+            already_enrolled = []
+            errors = []
+            
+            with transaction.atomic():
+                for unit_id in unit_ids:
+                    unit = Unit.objects.get(id=unit_id)
+                    
+                    # Check if already enrolled
+                    existing = UnitEnrollment.objects.filter(
+                        student=student,
+                        unit=unit,
+                        semester=semester
+                    ).first()
+                    
+                    if existing:
+                        already_enrolled.append(unit.code)
+                        continue
+                    
+                    # Create enrollment
+                    UnitEnrollment.objects.create(
+                        student=student,
+                        unit=unit,
+                        semester=semester,
+                        status='ENROLLED'
+                    )
+                    enrolled_count += 1
+                
+                # Update semester registration
+                sem_reg, created = SemesterRegistration.objects.get_or_create(
+                    student=student,
+                    semester=semester,
+                    defaults={'status': 'REGISTERED', 'units_enrolled': 0}
+                )
+                sem_reg.units_enrolled = UnitEnrollment.objects.filter(
+                    student=student,
+                    semester=semester,
+                    status='ENROLLED'
+                ).count()
+                sem_reg.save()
+            
+            if enrolled_count > 0:
+                messages.success(request, f'Successfully enrolled {student.registration_number} in {enrolled_count} unit(s).')
+            
+            if already_enrolled:
+                messages.warning(request, f'Already enrolled in: {", ".join(already_enrolled)}')
+            
+            return redirect('enrollment_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error enrolling student: {str(e)}')
+            return redirect('single_enrollment')
+    
+    # GET request
+    students = Student.objects.filter(is_active=True).select_related('programme').order_by('registration_number')
+    semesters = Semester.objects.select_related('academic_year').order_by('-academic_year__start_date')
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    
+    context = {
+        'students': students,
+        'semesters': semesters,
+        'programmes': programmes,
+    }
+    
+    return render(request, 'enrollments/single_enrollment.html', context)
+
+
+# ========================
+# BULK ENROLLMENT
+# ========================
+
+@login_required
+def bulk_enrollment(request):
+    """
+    Enroll multiple students in multiple units at once
+    """
+    if request.method == 'POST':
+        programme_id = request.POST.get('programme')
+        year_level = request.POST.get('year_level')
+        semester_id = request.POST.get('semester')
+        unit_ids = request.POST.getlist('units')
+        
+        if not all([programme_id, year_level, semester_id, unit_ids]):
+            messages.error(request, 'Please fill in all required fields.')
+            return redirect('bulk_enrollment')
+        
+        try:
+            programme = Programme.objects.get(id=programme_id)
+            semester = Semester.objects.get(id=semester_id)
+            units = Unit.objects.filter(id__in=unit_ids)
+            
+            # Get all students matching criteria
+            students = Student.objects.filter(
+                programme=programme,
+                current_year=year_level,
+                is_active=True
+            )
+            
+            if not students.exists():
+                messages.warning(request, 'No students found matching the criteria.')
+                return redirect('bulk_enrollment')
+            
+            enrolled_count = 0
+            skipped_count = 0
+            student_count = students.count()
+            
+            with transaction.atomic():
+                for student in students:
+                    # Check or create semester registration
+                    sem_reg, created = SemesterRegistration.objects.get_or_create(
+                        student=student,
+                        semester=semester,
+                        defaults={'status': 'REGISTERED', 'units_enrolled': 0}
+                    )
+                    
+                    for unit in units:
+                        # Check if already enrolled
+                        existing = UnitEnrollment.objects.filter(
+                            student=student,
+                            unit=unit,
+                            semester=semester
+                        ).first()
+                        
+                        if existing:
+                            skipped_count += 1
+                            continue
+                        
+                        # Create enrollment
+                        UnitEnrollment.objects.create(
+                            student=student,
+                            unit=unit,
+                            semester=semester,
+                            status='ENROLLED'
+                        )
+                        enrolled_count += 1
+                    
+                    # Update semester registration unit count
+                    sem_reg.units_enrolled = UnitEnrollment.objects.filter(
+                        student=student,
+                        semester=semester,
+                        status='ENROLLED'
+                    ).count()
+                    sem_reg.save()
+            
+            messages.success(
+                request, 
+                f'Bulk enrollment completed! Enrolled {student_count} students in {len(units)} units. '
+                f'Total enrollments created: {enrolled_count}. Skipped (already enrolled): {skipped_count}.'
+            )
+            return redirect('enrollment_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error during bulk enrollment: {str(e)}')
+            return redirect('bulk_enrollment')
+    
+    # GET request
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    semesters = Semester.objects.select_related('academic_year').order_by('-academic_year__start_date')
+    academic_years = AcademicYear.objects.all().order_by('-start_date')
+    
+    context = {
+        'programmes': programmes,
+        'semesters': semesters,
+        'academic_years': academic_years,
+    }
+    
+    return render(request, 'enrollments/bulk_enrollment.html', context)
+
+
+# ========================
+# AJAX ENDPOINTS
+# ========================
+
+@login_required
+def get_programme_units(request):
+    """
+    Get units for a specific programme and year level
+    AJAX endpoint
+    """
+    programme_id = request.GET.get('programme_id')
+    year_level = request.GET.get('year_level')
+    semester_number = request.GET.get('semester_number')
+    
+    if not all([programme_id, year_level]):
+        return JsonResponse({'units': []})
+    
+    # Get programme units
+    programme_units = ProgrammeUnit.objects.filter(
+        programme_id=programme_id,
+        year_level=year_level
+    ).select_related('unit')
+    
+    # Filter by semester if provided
+    if semester_number:
+        programme_units = programme_units.filter(semester=semester_number)
+    
+    units_data = []
+    for pu in programme_units:
+        units_data.append({
+            'id': pu.unit.id,
+            'code': pu.unit.code,
+            'name': pu.unit.name,
+            'credits': pu.unit.credit_hours,
+            'is_mandatory': pu.is_mandatory,
+            'semester': pu.semester
+        })
+    
+    return JsonResponse({'units': units_data})
+
+
+@login_required
+def get_students_count(request):
+    """
+    Get count of students matching criteria for bulk enrollment
+    AJAX endpoint
+    """
+    programme_id = request.GET.get('programme_id')
+    year_level = request.GET.get('year_level')
+    
+    if not all([programme_id, year_level]):
+        return JsonResponse({'count': 0, 'students': []})
+    
+    students = Student.objects.filter(
+        programme_id=programme_id,
+        current_year=year_level,
+        is_active=True
+    ).select_related('programme')
+    
+    students_data = []
+    for student in students[:50]:  # Limit to 50 for preview
+        students_data.append({
+            'registration_number': student.registration_number,
+            'name': f"{student.first_name} {student.last_name}",
+            'programme': student.programme.code
+        })
+    
+    return JsonResponse({
+        'count': students.count(),
+        'students': students_data,
+        'has_more': students.count() > 50
+    })
+
+
+@login_required
+def check_enrollment_conflicts(request):
+    """
+    Check if a student is already enrolled in selected units
+    AJAX endpoint
+    """
+    student_id = request.GET.get('student_id')
+    semester_id = request.GET.get('semester_id')
+    unit_ids = request.GET.getlist('unit_ids[]')
+    
+    if not all([student_id, semester_id, unit_ids]):
+        return JsonResponse({'conflicts': []})
+    
+    conflicts = []
+    existing_enrollments = UnitEnrollment.objects.filter(
+        student_id=student_id,
+        semester_id=semester_id,
+        unit_id__in=unit_ids
+    ).select_related('unit')
+    
+    for enrollment in existing_enrollments:
+        conflicts.append({
+            'unit_code': enrollment.unit.code,
+            'unit_name': enrollment.unit.name,
+            'status': enrollment.get_status_display()
+        })
+    
+    return JsonResponse({'conflicts': conflicts})
+
+
+# ========================
+# ENROLLMENT ACTIONS
+# ========================
+
+@login_required
+def drop_enrollment(request, enrollment_id):
+    """
+    Drop a unit enrollment
+    """
+    if request.method == 'POST':
+        try:
+            enrollment = get_object_or_404(UnitEnrollment, id=enrollment_id)
+            
+            # Check if enrollment can be dropped
+            if enrollment.status == 'COMPLETED':
+                messages.error(request, 'Cannot drop a completed enrollment.')
+                return redirect('enrollment_list')
+            
+            enrollment.status = 'DROPPED'
+            enrollment.save()
+            
+            # Update semester registration count
+            sem_reg = SemesterRegistration.objects.filter(
+                student=enrollment.student,
+                semester=enrollment.semester
+            ).first()
+            
+            if sem_reg:
+                sem_reg.units_enrolled = UnitEnrollment.objects.filter(
+                    student=enrollment.student,
+                    semester=enrollment.semester,
+                    status='ENROLLED'
+                ).count()
+                sem_reg.save()
+            
+            messages.success(request, f'Successfully dropped {enrollment.unit.code} for {enrollment.student.registration_number}.')
+            
+        except Exception as e:
+            messages.error(request, f'Error dropping enrollment: {str(e)}')
+    
+    return redirect('enrollment_list')
+
+
+@login_required
+def delete_enrollment(request, enrollment_id):
+    """
+    Delete an enrollment (admin only)
+    """
+    if request.method == 'POST':
+        try:
+            enrollment = get_object_or_404(UnitEnrollment, id=enrollment_id)
+            student = enrollment.student
+            semester = enrollment.semester
+            unit_code = enrollment.unit.code
+            reg_number = enrollment.student.registration_number
+            
+            enrollment.delete()
+            
+            # Update semester registration count
+            sem_reg = SemesterRegistration.objects.filter(
+                student=student,
+                semester=semester
+            ).first()
+            
+            if sem_reg:
+                sem_reg.units_enrolled = UnitEnrollment.objects.filter(
+                    student=student,
+                    semester=semester,
+                    status='ENROLLED'
+                ).count()
+                sem_reg.save()
+            
+            messages.success(request, f'Successfully deleted enrollment: {unit_code} for {reg_number}.')
+            
+        except Exception as e:
+            messages.error(request, f'Error deleting enrollment: {str(e)}')
+    
+    return redirect('enrollment_list')
+
+
+@login_required
+def enrollment_detail(request, enrollment_id):
+    """
+    View detailed information about an enrollment
+    """
+    enrollment = get_object_or_404(
+        UnitEnrollment.objects.select_related(
+            'student', 'student__programme', 'unit', 'semester', 'semester__academic_year'
+        ),
+        id=enrollment_id
+    )
+    
+    # Get marks for this enrollment
+    marks = enrollment.marks.select_related('assessment_component', 'entered_by').all()
+    
+    # Get final grade if exists
+    final_grade = None
+    if hasattr(enrollment, 'final_grade'):
+        final_grade = enrollment.final_grade
+    
+    context = {
+        'enrollment': enrollment,
+        'marks': marks,
+        'final_grade': final_grade,
+    }
+    
+    return render(request, 'enrollments/enrollment_detail.html', context)

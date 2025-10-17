@@ -184,5 +184,18 @@ urlpatterns = [
     path('progression/', views.student_progression_list, name='student_progression_list'),
     path('progression/<str:registration_number>/', views.student_progression_detail, name='student_progression_detail'),
     path('progression/export/', views.export_student_progression, name='export_student_progression'),
+
+    # Enrollment Management URLs
+    path('enrollments/', views.enrollment_list, name='enrollment_list'),
+    path('enrollments/single/', views.single_enrollment, name='single_enrollment'),
+    path('enrollments/bulk/', views.bulk_enrollment, name='bulk_enrollment'),
+    path('enrollments/<int:enrollment_id>/', views.enrollment_detail, name='enrollment_detail'),
+    path('enrollments/<int:enrollment_id>/drop/', views.drop_enrollment, name='drop_enrollment'),
+    path('enrollments/<int:enrollment_id>/delete/', views.delete_enrollment, name='delete_enrollment'),
+    
+    # AJAX Endpoints
+    path('api/programme-units/', views.get_programme_units, name='get_programme_units'),
+    path('api/students-count/', views.get_students_count, name='get_students_count'),
+    path('api/check-conflicts/', views.check_enrollment_conflicts, name='check_enrollment_conflicts'),
 ]
 
