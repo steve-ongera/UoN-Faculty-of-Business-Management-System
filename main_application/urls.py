@@ -161,5 +161,13 @@ urlpatterns = [
     path('admin-programme-unit/<int:programme_unit_id>/', views.get_programme_unit, name='get_programme_unit'),
     path('admin-programme-unit/<int:programme_unit_id>/update/', views.update_programme_unit, name='update_programme_unit'),
     path('admin-programme-unit/<int:programme_unit_id>/remove/', views.remove_unit_from_programme, name='remove_unit_from_programme'),
+
+    path('grading-schemes/', views.grading_scheme_list, name='grading_scheme_list'),
+    path('grading-schemes/<int:scheme_id>/', views.grading_scheme_detail, name='grading_scheme_detail'),
+    path('grading-schemes/create/', views.grading_scheme_create, name='grading_scheme_create'),
+    path('grading-schemes/<int:scheme_id>/update/', views.grading_scheme_update, name='grading_scheme_update'),
+    path('grading-schemes/<int:scheme_id>/delete/', views.grading_scheme_delete, name='grading_scheme_delete'),
+    path('grading-schemes/bulk-create/', views.grading_scheme_bulk_create, name='grading_scheme_bulk_create'),
+    path('grading-schemes/programme/<int:programme_id>/schemes/', views.get_programme_schemes, name='get_programme_schemes'),
 ]
 

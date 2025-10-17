@@ -1,0 +1,463 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}{{ action }} Grading Scheme{% endblock %}
+
+{% block page_title %}{{ action }} Grading Scheme{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        color: #4338CA;
+    }
+
+    .form-container {
+        background: white;
+        border-radius: 5px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        max-width: 800px;
+        margin: 0 auto;
+        border: 1px solid #f0f0f0;
+    }
+
+    .form-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #F1F5F9;
+    }
+
+    .form-header h2 {
+        margin: 0 0 10px 0;
+        font-size: 24px;
+        font-weight: 700;
+        color: #1E293B;
+    }
+
+    .form-header p {
+        margin: 0;
+        color: #64748B;
+        font-size: 14px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 8px;
+    }
+
+    .form-group label .required {
+        color: #EF4444;
+        margin-left: 3px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #E2E8F0;
+        border-radius: 5px;
+        font-size: 14px;
+        color: #1E293B;
+        transition: all 0.3s ease;
+        box-sizing: border-box;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .help-text {
+        font-size: 12px;
+        color: #64748B;
+        margin-top: 5px;
+        display: block;
+    }
+
+    .error-message {
+        background: #FEE2E2;
+        color: #991B1B;
+        padding: 12px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+
+    .error-message ul {
+        margin: 0;
+        padding-left: 20px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid #F1F5F9;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+    }
+
+    .btn-secondary {
+        background: #64748B;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #475569;
+    }
+
+    .info-box {
+        background: #EFF6FF;
+        border-left: 4px solid #3B82F6;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+
+    .info-box h4 {
+        margin: 0 0 8px 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #1E40AF;
+    }
+
+    .info-box p {
+        margin: 0;
+        font-size: 13px;
+        color: #1E40AF;
+        line-height: 1.5;
+    }
+
+    .grade-preview {
+        background: #F8FAFC;
+        padding: 20px;
+        border-radius: 5px;
+        border: 1px solid #E2E8F0;
+        margin-top: 20px;
+    }
+
+    .grade-preview h4 {
+        margin: 0 0 15px 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #475569;
+    }
+
+    .preview-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #E2E8F0;
+    }
+
+    .preview-item:last-child {
+        border-bottom: none;
+    }
+
+    .preview-label {
+        font-size: 13px;
+        color: #64748B;
+    }
+
+    .preview-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1E293B;
+    }
+
+    @media (max-width: 768px) {
+        .form-container {
+            padding: 20px;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'grading_scheme_list' %}">Grading Schemes</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ action }} Scheme</li>
+    </ol>
+</nav>
+
+<!-- Form Container -->
+<div class="form-container">
+    <div class="form-header">
+        <h2><i class="bi bi-award"></i> {{ action }} Grading Scheme</h2>
+        <p>Define grading criteria for programme assessment</p>
+    </div>
+
+    <!-- Info Box -->
+    <div class="info-box">
+        <h4><i class="bi bi-info-circle"></i> Important Notes</h4>
+        <p>
+            • Ensure mark ranges don't overlap with existing schemes for the same programme<br>
+            • Minimum marks must be less than maximum marks<br>
+            • Grade points are used for GPA calculations
+        </p>
+    </div>
+
+    <!-- Error Messages -->
+    {% if form.errors or form.non_field_errors %}
+    <div class="error-message">
+        <strong><i class="bi bi-exclamation-triangle"></i> Please correct the following errors:</strong>
+        {% if form.non_field_errors %}
+        <ul>
+            {% for error in form.non_field_errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% for field in form %}
+            {% if field.errors %}
+            <ul>
+                {% for error in field.errors %}
+                <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Form -->
+    <form method="post" id="gradingSchemeForm">
+        {% csrf_token %}
+        
+        <!-- Programme -->
+        <div class="form-group">
+            <label for="{{ form.programme.id_for_label }}">
+                {{ form.programme.label }}
+                <span class="required">*</span>
+            </label>
+            {{ form.programme }}
+            {% if form.programme.help_text %}
+            <span class="help-text">{{ form.programme.help_text }}</span>
+            {% endif %}
+        </div>
+
+        <!-- Grade and Grade Point Row -->
+        <div class="form-row">
+            <div class="form-group">
+                <label for="{{ form.grade.id_for_label }}">
+                    {{ form.grade.label }}
+                    <span class="required">*</span>
+                </label>
+                {{ form.grade }}
+                {% if form.grade.help_text %}
+                <span class="help-text">{{ form.grade.help_text }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.grade_point.id_for_label }}">
+                    {{ form.grade_point.label }}
+                    <span class="required">*</span>
+                </label>
+                {{ form.grade_point }}
+                {% if form.grade_point.help_text %}
+                <span class="help-text">{{ form.grade_point.help_text }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Mark Range Row -->
+        <div class="form-row">
+            <div class="form-group">
+                <label for="{{ form.min_marks.id_for_label }}">
+                    {{ form.min_marks.label }}
+                    <span class="required">*</span>
+                </label>
+                {{ form.min_marks }}
+                {% if form.min_marks.help_text %}
+                <span class="help-text">{{ form.min_marks.help_text }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.max_marks.id_for_label }}">
+                    {{ form.max_marks.label }}
+                    <span class="required">*</span>
+                </label>
+                {{ form.max_marks }}
+                {% if form.max_marks.help_text %}
+                <span class="help-text">{{ form.max_marks.help_text }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+            <label for="{{ form.description.id_for_label }}">
+                {{ form.description.label }}
+                <span class="required">*</span>
+            </label>
+            {{ form.description }}
+            {% if form.description.help_text %}
+            <span class="help-text">{{ form.description.help_text }}</span>
+            {% endif %}
+        </div>
+
+        <!-- Preview (for update) -->
+        {% if scheme %}
+        <div class="grade-preview">
+            <h4><i class="bi bi-eye"></i> Current Values</h4>
+            <div class="preview-item">
+                <span class="preview-label">Grade:</span>
+                <span class="preview-value">{{ scheme.grade }}</span>
+            </div>
+            <div class="preview-item">
+                <span class="preview-label">Mark Range:</span>
+                <span class="preview-value">{{ scheme.min_marks }}% - {{ scheme.max_marks }}%</span>
+            </div>
+            <div class="preview-item">
+                <span class="preview-label">Grade Point:</span>
+                <span class="preview-value">{{ scheme.grade_point }}</span>
+            </div>
+            <div class="preview-item">
+                <span class="preview-label">Description:</span>
+                <span class="preview-value">{{ scheme.description }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <a href="{% url 'grading_scheme_list' %}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle"></i> {{ action }} Grading Scheme
+            </button>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Form validation
+    document.getElementById('gradingSchemeForm').addEventListener('submit', function(e) {
+        const minMarks = parseFloat(document.getElementById('{{ form.min_marks.id_for_label }}').value);
+        const maxMarks = parseFloat(document.getElementById('{{ form.max_marks.id_for_label }}').value);
+        
+        if (minMarks >= maxMarks) {
+            e.preventDefault();
+            alert('Minimum marks must be less than maximum marks!');
+            return false;
+        }
+        
+        if (minMarks < 0 || maxMarks > 100) {
+            e.preventDefault();
+            alert('Marks must be between 0 and 100!');
+            return false;
+        }
+    });
+
+    // Real-time preview (optional)
+    const gradeInput = document.getElementById('{{ form.grade.id_for_label }}');
+    const minMarksInput = document.getElementById('{{ form.min_marks.id_for_label }}');
+    const maxMarksInput = document.getElementById('{{ form.max_marks.id_for_label }}');
+    const gradePointInput = document.getElementById('{{ form.grade_point.id_for_label }}');
+
+    function validateMarkRange() {
+        const minMarks = parseFloat(minMarksInput.value);
+        const maxMarks = parseFloat(maxMarksInput.value);
+        
+        if (minMarks && maxMarks && minMarks >= maxMarks) {
+            minMarksInput.style.borderColor = '#EF4444';
+            maxMarksInput.style.borderColor = '#EF4444';
+        } else {
+            minMarksInput.style.borderColor = '#E2E8F0';
+            maxMarksInput.style.borderColor = '#E2E8F0';
+        }
+    }
+
+    minMarksInput.addEventListener('input', validateMarkRange);
+    maxMarksInput.addEventListener('input', validateMarkRange);
+</script>
+{% endblock %}

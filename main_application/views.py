@@ -7452,3 +7452,360 @@ def unit_detail(request, unit_id):
         'active_enrollments': active_enrollments,
     }
     return render(request, 'admin/unit_detail.html', context)
+
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.db.models import Q, Count
+from django.core.paginator import Paginator
+from django.http import JsonResponse
+from .models import GradingScheme, Programme, Department
+from .forms import GradingSchemeForm
+
+# ========================
+# GRADING SCHEME LIST VIEW
+# ========================
+
+@login_required
+def grading_scheme_list(request):
+    """Display list of all grading schemes with filters"""
+    
+    # Check user permissions
+    if request.user.user_type not in ['ICT_ADMIN', 'DEAN', 'COD']:
+        messages.error(request, "You don't have permission to access this page.")
+        return redirect('admin_dashboard')
+    
+    # Get filter parameters
+    search_query = request.GET.get('search', '')
+    programme_filter = request.GET.get('programme', '')
+    department_filter = request.GET.get('department', '')
+    
+    # Base queryset
+    schemes = GradingScheme.objects.select_related(
+        'programme',
+        'programme__department'
+    ).all()
+    
+    # Apply filters
+    if search_query:
+        schemes = schemes.filter(
+            Q(grade__icontains=search_query) |
+            Q(programme__name__icontains=search_query) |
+            Q(programme__code__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+    
+    if programme_filter:
+        schemes = schemes.filter(programme_id=programme_filter)
+    
+    if department_filter:
+        schemes = schemes.filter(programme__department_id=department_filter)
+    
+    # Order by programme and marks
+    schemes = schemes.order_by('programme__code', '-min_marks')
+    
+    # Pagination
+    paginator = Paginator(schemes, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Get filter options
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    departments = Department.objects.all().order_by('name')
+    
+    # Statistics
+    total_schemes = schemes.count()
+    programmes_with_schemes = schemes.values('programme').distinct().count()
+    
+    context = {
+        'page_obj': page_obj,
+        'schemes': page_obj,
+        'programmes': programmes,
+        'departments': departments,
+        'search_query': search_query,
+        'programme_filter': programme_filter,
+        'department_filter': department_filter,
+        'total_schemes': total_schemes,
+        'programmes_with_schemes': programmes_with_schemes,
+    }
+    
+    return render(request, 'grading/grading_scheme_list.html', context)
+
+
+# ========================
+# GRADING SCHEME DETAIL VIEW
+# ========================
+
+@login_required
+def grading_scheme_detail(request, scheme_id):
+    """Display detailed information about a grading scheme"""
+    
+    # Check user permissions
+    if request.user.user_type not in ['ICT_ADMIN', 'DEAN', 'COD', 'LECTURER']:
+        messages.error(request, "You don't have permission to access this page.")
+        return redirect('admin_dashboard')
+    
+    scheme = get_object_or_404(
+        GradingScheme.objects.select_related('programme', 'programme__department'),
+        id=scheme_id
+    )
+    
+    # Get all grading schemes for this programme
+    programme_schemes = GradingScheme.objects.filter(
+        programme=scheme.programme
+    ).order_by('-min_marks')
+    
+    # Statistics
+    total_grades = programme_schemes.count()
+    passing_grades = programme_schemes.filter(
+        description__icontains='pass'
+    ).count()
+    
+    context = {
+        'scheme': scheme,
+        'programme_schemes': programme_schemes,
+        'total_grades': total_grades,
+        'passing_grades': passing_grades,
+    }
+    
+    return render(request, 'grading/grading_scheme_detail.html', context)
+
+
+# ========================
+# GRADING SCHEME CREATE VIEW
+# ========================
+
+@login_required
+def grading_scheme_create(request):
+    """Create a new grading scheme"""
+    
+    # Check user permissions
+    if request.user.user_type not in ['ICT_ADMIN', 'DEAN']:
+        messages.error(request, "You don't have permission to perform this action.")
+        return redirect('grading_scheme_list')
+    
+    if request.method == 'POST':
+        form = GradingSchemeForm(request.POST)
+        if form.is_valid():
+            # Validate mark ranges
+            min_marks = form.cleaned_data['min_marks']
+            max_marks = form.cleaned_data['max_marks']
+            programme = form.cleaned_data['programme']
+            grade = form.cleaned_data['grade']
+            
+            # Check if grade already exists for this programme
+            if GradingScheme.objects.filter(programme=programme, grade=grade).exists():
+                messages.error(request, f"Grade '{grade}' already exists for {programme.code}.")
+                return render(request, 'grading/grading_scheme_form.html', {'form': form})
+            
+            # Validate min < max
+            if min_marks >= max_marks:
+                messages.error(request, "Minimum marks must be less than maximum marks.")
+                return render(request, 'grading/grading_scheme_form.html', {'form': form})
+            
+            # Check for overlapping ranges
+            overlapping = GradingScheme.objects.filter(
+                programme=programme
+            ).filter(
+                Q(min_marks__lte=max_marks, max_marks__gte=min_marks)
+            )
+            
+            if overlapping.exists():
+                messages.error(request, "Mark range overlaps with existing grading scheme.")
+                return render(request, 'grading/grading_scheme_form.html', {'form': form})
+            
+            scheme = form.save()
+            messages.success(request, f"Grading scheme '{scheme.grade}' created successfully!")
+            return redirect('grading_scheme_detail', scheme_id=scheme.id)
+    else:
+        form = GradingSchemeForm()
+    
+    context = {
+        'form': form,
+        'action': 'Create',
+    }
+    
+    return render(request, 'grading/grading_scheme_form.html', context)
+
+
+# ========================
+# GRADING SCHEME UPDATE VIEW
+# ========================
+
+@login_required
+def grading_scheme_update(request, scheme_id):
+    """Update an existing grading scheme"""
+    
+    # Check user permissions
+    if request.user.user_type not in ['ICT_ADMIN', 'DEAN']:
+        messages.error(request, "You don't have permission to perform this action.")
+        return redirect('grading_scheme_list')
+    
+    scheme = get_object_or_404(GradingScheme, id=scheme_id)
+    
+    if request.method == 'POST':
+        form = GradingSchemeForm(request.POST, instance=scheme)
+        if form.is_valid():
+            # Validate mark ranges
+            min_marks = form.cleaned_data['min_marks']
+            max_marks = form.cleaned_data['max_marks']
+            programme = form.cleaned_data['programme']
+            grade = form.cleaned_data['grade']
+            
+            # Check if grade already exists for this programme (excluding current)
+            if GradingScheme.objects.filter(
+                programme=programme, 
+                grade=grade
+            ).exclude(id=scheme_id).exists():
+                messages.error(request, f"Grade '{grade}' already exists for {programme.code}.")
+                return render(request, 'grading/grading_scheme_form.html', {
+                    'form': form,
+                    'scheme': scheme,
+                    'action': 'Update'
+                })
+            
+            # Validate min < max
+            if min_marks >= max_marks:
+                messages.error(request, "Minimum marks must be less than maximum marks.")
+                return render(request, 'grading/grading_scheme_form.html', {
+                    'form': form,
+                    'scheme': scheme,
+                    'action': 'Update'
+                })
+            
+            # Check for overlapping ranges (excluding current)
+            overlapping = GradingScheme.objects.filter(
+                programme=programme
+            ).exclude(id=scheme_id).filter(
+                Q(min_marks__lte=max_marks, max_marks__gte=min_marks)
+            )
+            
+            if overlapping.exists():
+                messages.error(request, "Mark range overlaps with existing grading scheme.")
+                return render(request, 'grading/grading_scheme_form.html', {
+                    'form': form,
+                    'scheme': scheme,
+                    'action': 'Update'
+                })
+            
+            scheme = form.save()
+            messages.success(request, f"Grading scheme '{scheme.grade}' updated successfully!")
+            return redirect('grading_scheme_detail', scheme_id=scheme.id)
+    else:
+        form = GradingSchemeForm(instance=scheme)
+    
+    context = {
+        'form': form,
+        'scheme': scheme,
+        'action': 'Update',
+    }
+    
+    return render(request, 'grading/grading_scheme_form.html', context)
+
+
+# ========================
+# GRADING SCHEME DELETE VIEW
+# ========================
+
+@login_required
+def grading_scheme_delete(request, scheme_id):
+    """Delete a grading scheme"""
+    
+    # Check user permissions
+    if request.user.user_type not in ['ICT_ADMIN', 'DEAN']:
+        messages.error(request, "You don't have permission to perform this action.")
+        return redirect('grading_scheme_list')
+    
+    scheme = get_object_or_404(GradingScheme, id=scheme_id)
+    
+    if request.method == 'POST':
+        programme_name = scheme.programme.name
+        grade = scheme.grade
+        scheme.delete()
+        messages.success(request, f"Grading scheme '{grade}' for {programme_name} deleted successfully!")
+        return redirect('grading_scheme_list')
+    
+    context = {
+        'scheme': scheme,
+    }
+    
+    return render(request, 'grading/grading_scheme_delete.html', context)
+
+
+# ========================
+# BULK GRADING SCHEME CREATION
+# ========================
+
+@login_required
+def grading_scheme_bulk_create(request):
+    """Create multiple grading schemes for a programme at once"""
+    
+    # Check user permissions
+    if request.user.user_type not in ['ICT_ADMIN', 'DEAN']:
+        messages.error(request, "You don't have permission to perform this action.")
+        return redirect('grading_scheme_list')
+    
+    if request.method == 'POST':
+        programme_id = request.POST.get('programme')
+        programme = get_object_or_404(Programme, id=programme_id)
+        
+        # Check if grading scheme already exists
+        existing_count = GradingScheme.objects.filter(programme=programme).count()
+        if existing_count > 0:
+            messages.warning(
+                request, 
+                f"{programme.code} already has {existing_count} grading schemes. "
+                "Please delete them first or add schemes individually."
+            )
+            return redirect('grading_scheme_list')
+        
+        # Default grading scheme (can be customized)
+        default_schemes = [
+            {'grade': 'A', 'min_marks': 70, 'max_marks': 100, 'grade_point': 4.0, 'description': 'Distinction'},
+            {'grade': 'B', 'min_marks': 60, 'max_marks': 69.99, 'grade_point': 3.0, 'description': 'Credit'},
+            {'grade': 'C', 'min_marks': 50, 'max_marks': 59.99, 'grade_point': 2.0, 'description': 'Pass'},
+            {'grade': 'D', 'min_marks': 40, 'max_marks': 49.99, 'grade_point': 1.0, 'description': 'Pass'},
+            {'grade': 'F', 'min_marks': 0, 'max_marks': 39.99, 'grade_point': 0.0, 'description': 'Fail'},
+        ]
+        
+        created_count = 0
+        for scheme_data in default_schemes:
+            GradingScheme.objects.create(
+                programme=programme,
+                **scheme_data
+            )
+            created_count += 1
+        
+        messages.success(
+            request, 
+            f"Successfully created {created_count} grading schemes for {programme.code}!"
+        )
+        return redirect('grading_scheme_list')
+    
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    
+    context = {
+        'programmes': programmes,
+    }
+    
+    return render(request, 'grading/grading_scheme_bulk_create.html', context)
+
+
+# ========================
+# AJAX: GET PROGRAMME GRADING SCHEMES
+# ========================
+
+@login_required
+def get_programme_schemes(request, programme_id):
+    """AJAX endpoint to get all grading schemes for a programme"""
+    
+    schemes = GradingScheme.objects.filter(
+        programme_id=programme_id
+    ).order_by('-min_marks').values(
+        'id', 'grade', 'min_marks', 'max_marks', 'grade_point', 'description'
+    )
+    
+    return JsonResponse({
+        'schemes': list(schemes)
+    })

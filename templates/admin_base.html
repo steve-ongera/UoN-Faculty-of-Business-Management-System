@@ -609,7 +609,7 @@
             <div class="submenu" id="submenu-grading">
                 <a href="{% url 'marks_entry_view'%}" class="submenu-item {% if request.resolver_match.url_name == 'marks_entry_view' %}active{% endif %}">Enter Marks</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'final_grades' %}active{% endif %}">Final Grades</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'grading_schemes' %}active{% endif %}">Grading Schemes</a>
+                <a href="{% url 'grading_scheme_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'grading_scheme_list' %}active{% endif %}">Grading Schemes</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'assessment_components' %}active{% endif %}">Assessment Components</a>
             </div>
 
