@@ -8188,3 +8188,556 @@ def fee_statement_detail(request, student_id, semester_id):
     }
     
     return render(request, 'fees/fee_statement_detail.html', context)
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Avg, Sum, Count
+from django.http import HttpResponse, JsonResponse
+from django.core.paginator import Paginator
+import csv
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+from io import BytesIO
+from .models import (
+    Student, Programme, AcademicYear, Semester, Unit, 
+    UnitEnrollment, StudentMarks, FinalGrade, Department
+)
+
+
+# ========================
+# HELPER FUNCTIONS
+# ========================
+
+def calculate_gpa(enrollments):
+    """Calculate GPA from enrollments with final grades"""
+    total_points = 0
+    total_credits = 0
+    
+    for enrollment in enrollments:
+        if hasattr(enrollment, 'final_grade') and enrollment.final_grade:
+            grade_point = enrollment.final_grade.grade_point
+            credits = enrollment.unit.credit_hours
+            total_points += (grade_point * credits)
+            total_credits += credits
+    
+    if total_credits > 0:
+        return round(total_points / total_credits, 2)
+    return 0.0
+
+
+def get_classification(gpa):
+    """Determine degree classification based on GPA"""
+    if gpa >= 3.70:
+        return "First Class Honours"
+    elif gpa >= 3.00:
+        return "Second Class Honours (Upper Division)"
+    elif gpa >= 2.50:
+        return "Second Class Honours (Lower Division)"
+    elif gpa >= 2.00:
+        return "Pass"
+    else:
+        return "Fail"
+
+
+def get_semester_results(student, semester):
+    """Get all results for a student in a specific semester"""
+    enrollments = UnitEnrollment.objects.filter(
+        student=student,
+        semester=semester
+    ).select_related('unit', 'final_grade').prefetch_related('marks__assessment_component')
+    
+    results = []
+    for enrollment in enrollments:
+        unit_data = {
+            'enrollment': enrollment,
+            'unit': enrollment.unit,
+            'marks': [],
+            'total_marks': 0,
+            'grade': None,
+            'grade_point': None
+        }
+        
+        # Get all marks for this enrollment
+        marks = StudentMarks.objects.filter(
+            enrollment=enrollment
+        ).select_related('assessment_component')
+        
+        for mark in marks:
+            unit_data['marks'].append({
+                'component': mark.assessment_component.name,
+                'type': mark.assessment_component.get_component_type_display(),
+                'marks': mark.marks_obtained,
+                'max_marks': mark.assessment_component.max_marks,
+                'weight': mark.assessment_component.weight_percentage
+            })
+        
+        # Get final grade
+        if hasattr(enrollment, 'final_grade') and enrollment.final_grade:
+            unit_data['total_marks'] = enrollment.final_grade.total_marks
+            unit_data['grade'] = enrollment.final_grade.grade
+            unit_data['grade_point'] = enrollment.final_grade.grade_point
+        
+        results.append(unit_data)
+    
+    return results
+
+
+# ========================
+# STUDENT PROGRESSION LIST
+# ========================
+
+@login_required
+def student_progression_list(request):
+    """
+    Display list of students with progression tracking
+    Features: Search, Filter, Export
+    """
+    # Get filter parameters
+    search_query = request.GET.get('search', '')
+    programme_id = request.GET.get('programme', '')
+    year_level = request.GET.get('year', '')
+    academic_year_id = request.GET.get('academic_year', '')
+    department_id = request.GET.get('department', '')
+    status = request.GET.get('status', '')
+    
+    # Base queryset
+    students = Student.objects.select_related(
+        'programme', 'programme__department', 'intake', 'user'
+    ).all()
+    
+    # Apply filters
+    if search_query:
+        students = students.filter(
+            Q(registration_number__icontains=search_query) |
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query) |
+            Q(surname__icontains=search_query)
+        )
+    
+    if programme_id:
+        students = students.filter(programme_id=programme_id)
+    
+    if year_level:
+        students = students.filter(current_year=year_level)
+    
+    if department_id:
+        students = students.filter(programme__department_id=department_id)
+    
+    if status == 'active':
+        students = students.filter(is_active=True)
+    elif status == 'inactive':
+        students = students.filter(is_active=False)
+    
+    # Calculate progression data for each student
+    student_data = []
+    for student in students:
+        # Get all enrollments with final grades
+        enrollments = UnitEnrollment.objects.filter(
+            student=student,
+            status='COMPLETED'
+        ).select_related('final_grade', 'unit', 'semester')
+        
+        # Calculate GPA
+        gpa = calculate_gpa(enrollments)
+        
+        # Get statistics
+        total_units = enrollments.count()
+        completed_units = enrollments.filter(final_grade__isnull=False).count()
+        failed_units = enrollments.filter(final_grade__grade='F').count()
+        
+        # Calculate total credits
+        total_credits = enrollments.aggregate(
+            total=Sum('unit__credit_hours')
+        )['total'] or 0
+        
+        student_data.append({
+            'student': student,
+            'gpa': gpa,
+            'classification': get_classification(gpa),
+            'total_units': total_units,
+            'completed_units': completed_units,
+            'failed_units': failed_units,
+            'total_credits': total_credits,
+        })
+    
+    # Pagination
+    paginator = Paginator(student_data, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Get filter options
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    departments = Department.objects.all().order_by('name')
+    academic_years = AcademicYear.objects.all().order_by('-start_date')
+    
+    context = {
+        'page_obj': page_obj,
+        'programmes': programmes,
+        'departments': departments,
+        'academic_years': academic_years,
+        'search_query': search_query,
+        'selected_programme': programme_id,
+        'selected_year': year_level,
+        'selected_academic_year': academic_year_id,
+        'selected_department': department_id,
+        'selected_status': status,
+        'total_students': len(student_data),
+    }
+    
+    return render(request, 'students/progression_list.html', context)
+
+
+# ========================
+# STUDENT PROGRESSION DETAIL
+# ========================
+
+@login_required
+def student_progression_detail(request, registration_number):
+    """
+    Detailed progression view for individual student
+    Shows marks by academic year and semester with classification
+    """
+    student = get_object_or_404(
+        Student.objects.select_related('programme', 'programme__department', 'intake', 'user'),
+        registration_number=registration_number
+    )
+    
+    # Get all academic years the student has been enrolled
+    enrollments = UnitEnrollment.objects.filter(
+        student=student
+    ).select_related('semester__academic_year', 'unit', 'final_grade')
+    
+    # Organize data by academic year and semester
+    academic_data = {}
+    
+    for enrollment in enrollments:
+        academic_year = enrollment.semester.academic_year
+        semester = enrollment.semester
+        
+        if academic_year not in academic_data:
+            academic_data[academic_year] = {
+                'year': academic_year,
+                'semesters': {},
+                'year_gpa': 0,
+                'total_credits': 0
+            }
+        
+        if semester not in academic_data[academic_year]['semesters']:
+            academic_data[academic_year]['semesters'][semester] = {
+                'semester': semester,
+                'results': [],
+                'semester_gpa': 0,
+                'total_credits': 0
+            }
+        
+        # Get marks for this enrollment
+        marks_data = []
+        marks = StudentMarks.objects.filter(
+            enrollment=enrollment
+        ).select_related('assessment_component')
+        
+        for mark in marks:
+            marks_data.append({
+                'component': mark.assessment_component.name,
+                'type': mark.assessment_component.get_component_type_display(),
+                'marks': mark.marks_obtained,
+                'max_marks': mark.assessment_component.max_marks,
+                'weight': mark.assessment_component.weight_percentage
+            })
+        
+        result_item = {
+            'unit': enrollment.unit,
+            'marks': marks_data,
+            'total_marks': 0,
+            'grade': '-',
+            'grade_point': 0,
+            'credits': enrollment.unit.credit_hours,
+            'status': enrollment.get_status_display()
+        }
+        
+        if hasattr(enrollment, 'final_grade') and enrollment.final_grade:
+            result_item['total_marks'] = enrollment.final_grade.total_marks
+            result_item['grade'] = enrollment.final_grade.grade
+            result_item['grade_point'] = enrollment.final_grade.grade_point
+        
+        academic_data[academic_year]['semesters'][semester]['results'].append(result_item)
+    
+    # Calculate GPAs for each semester and year
+    for year_key, year_data in academic_data.items():
+        year_enrollments = []
+        for semester_key, semester_data in year_data['semesters'].items():
+            # Calculate semester GPA
+            semester_enrollments = UnitEnrollment.objects.filter(
+                student=student,
+                semester=semester_key,
+                status='COMPLETED'
+            ).select_related('final_grade', 'unit')
+            
+            semester_gpa = calculate_gpa(semester_enrollments)
+            semester_data['semester_gpa'] = semester_gpa
+            
+            # Calculate semester credits
+            semester_credits = semester_enrollments.aggregate(
+                total=Sum('unit__credit_hours')
+            )['total'] or 0
+            semester_data['total_credits'] = semester_credits
+            
+            year_enrollments.extend(list(semester_enrollments))
+        
+        # Calculate year GPA
+        if year_enrollments:
+            year_gpa = calculate_gpa(year_enrollments)
+            year_data['year_gpa'] = year_gpa
+            
+            # Calculate year credits
+            year_credits = sum([e.unit.credit_hours for e in year_enrollments])
+            year_data['total_credits'] = year_credits
+    
+    # Calculate overall GPA
+    all_enrollments = UnitEnrollment.objects.filter(
+        student=student,
+        status='COMPLETED'
+    ).select_related('final_grade', 'unit')
+    
+    overall_gpa = calculate_gpa(all_enrollments)
+    classification = get_classification(overall_gpa)
+    
+    # Calculate overall statistics
+    total_credits = all_enrollments.aggregate(
+        total=Sum('unit__credit_hours')
+    )['total'] or 0
+    
+    completed_units = all_enrollments.filter(final_grade__isnull=False).count()
+    failed_units = all_enrollments.filter(final_grade__grade='F').count()
+    
+    context = {
+        'student': student,
+        'academic_data': academic_data,
+        'overall_gpa': overall_gpa,
+        'classification': classification,
+        'total_credits': total_credits,
+        'completed_units': completed_units,
+        'failed_units': failed_units,
+        'total_enrollments': all_enrollments.count(),
+    }
+    
+    return render(request, 'students/progression_detail.html', context)
+
+
+# ========================
+# EXPORT FUNCTIONALITY
+# ========================
+
+@login_required
+def export_student_progression(request):
+    """
+    Export student progression data to CSV or Excel
+    """
+    export_format = request.GET.get('format', 'csv')
+    programme_id = request.GET.get('programme', '')
+    year_level = request.GET.get('year', '')
+    academic_year_id = request.GET.get('academic_year', '')
+    unit_id = request.GET.get('unit', '')
+    
+    # Base queryset
+    students = Student.objects.select_related(
+        'programme', 'programme__department', 'intake'
+    ).all()
+    
+    # Apply filters
+    if programme_id:
+        students = students.filter(programme_id=programme_id)
+    if year_level:
+        students = students.filter(current_year=year_level)
+    
+    # Get enrollments based on filters
+    enrollments_filter = Q()
+    if academic_year_id:
+        enrollments_filter &= Q(semester__academic_year_id=academic_year_id)
+    if unit_id:
+        enrollments_filter &= Q(unit_id=unit_id)
+    
+    if export_format == 'csv':
+        return export_to_csv(students, enrollments_filter, academic_year_id, unit_id)
+    else:
+        return export_to_excel(students, enrollments_filter, academic_year_id, unit_id)
+
+
+def export_to_csv(students, enrollments_filter, academic_year_id, unit_id):
+    """Export to CSV format"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="student_progression.csv"'
+    
+    writer = csv.writer(response)
+    
+    # Write header
+    if unit_id:
+        # Specific unit export
+        unit = Unit.objects.get(id=unit_id)
+        writer.writerow([
+            'Registration Number', 'Student Name', 'Programme', 'Year',
+            'Unit Code', 'Unit Name', 'Total Marks', 'Grade', 'Grade Point', 'Status'
+        ])
+        
+        for student in students:
+            enrollments = UnitEnrollment.objects.filter(
+                student=student,
+                unit_id=unit_id
+            ).filter(enrollments_filter).select_related('final_grade', 'unit', 'semester')
+            
+            for enrollment in enrollments:
+                writer.writerow([
+                    student.registration_number,
+                    f"{student.first_name} {student.last_name}",
+                    student.programme.code,
+                    student.current_year,
+                    enrollment.unit.code,
+                    enrollment.unit.name,
+                    enrollment.final_grade.total_marks if hasattr(enrollment, 'final_grade') and enrollment.final_grade else '-',
+                    enrollment.final_grade.grade if hasattr(enrollment, 'final_grade') and enrollment.final_grade else '-',
+                    enrollment.final_grade.grade_point if hasattr(enrollment, 'final_grade') and enrollment.final_grade else '-',
+                    enrollment.get_status_display()
+                ])
+    else:
+        # General progression export
+        writer.writerow([
+            'Registration Number', 'Student Name', 'Programme', 'Year',
+            'GPA', 'Classification', 'Total Credits', 'Completed Units', 'Failed Units'
+        ])
+        
+        for student in students:
+            enrollments = UnitEnrollment.objects.filter(
+                student=student,
+                status='COMPLETED'
+            ).filter(enrollments_filter).select_related('final_grade', 'unit')
+            
+            gpa = calculate_gpa(enrollments)
+            classification = get_classification(gpa)
+            total_credits = enrollments.aggregate(total=Sum('unit__credit_hours'))['total'] or 0
+            completed_units = enrollments.filter(final_grade__isnull=False).count()
+            failed_units = enrollments.filter(final_grade__grade='F').count()
+            
+            writer.writerow([
+                student.registration_number,
+                f"{student.first_name} {student.last_name}",
+                student.programme.code,
+                student.current_year,
+                gpa,
+                classification,
+                total_credits,
+                completed_units,
+                failed_units
+            ])
+    
+    return response
+
+
+def export_to_excel(students, enrollments_filter, academic_year_id, unit_id):
+    """Export to Excel format"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Student Progression"
+    
+    # Styling
+    header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    
+    if unit_id:
+        # Specific unit export
+        unit = Unit.objects.get(id=unit_id)
+        headers = [
+            'Registration Number', 'Student Name', 'Programme', 'Year',
+            'Unit Code', 'Unit Name', 'Total Marks', 'Grade', 'Grade Point', 'Status'
+        ]
+        
+        ws.append(headers)
+        
+        # Style header
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+        
+        for student in students:
+            enrollments = UnitEnrollment.objects.filter(
+                student=student,
+                unit_id=unit_id
+            ).filter(enrollments_filter).select_related('final_grade', 'unit', 'semester')
+            
+            for enrollment in enrollments:
+                ws.append([
+                    student.registration_number,
+                    f"{student.first_name} {student.last_name}",
+                    student.programme.code,
+                    student.current_year,
+                    enrollment.unit.code,
+                    enrollment.unit.name,
+                    float(enrollment.final_grade.total_marks) if hasattr(enrollment, 'final_grade') and enrollment.final_grade else '-',
+                    enrollment.final_grade.grade if hasattr(enrollment, 'final_grade') and enrollment.final_grade else '-',
+                    float(enrollment.final_grade.grade_point) if hasattr(enrollment, 'final_grade') and enrollment.final_grade else '-',
+                    enrollment.get_status_display()
+                ])
+    else:
+        # General progression export
+        headers = [
+            'Registration Number', 'Student Name', 'Programme', 'Year',
+            'GPA', 'Classification', 'Total Credits', 'Completed Units', 'Failed Units'
+        ]
+        
+        ws.append(headers)
+        
+        # Style header
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+        
+        for student in students:
+            enrollments = UnitEnrollment.objects.filter(
+                student=student,
+                status='COMPLETED'
+            ).filter(enrollments_filter).select_related('final_grade', 'unit')
+            
+            gpa = calculate_gpa(enrollments)
+            classification = get_classification(gpa)
+            total_credits = enrollments.aggregate(total=Sum('unit__credit_hours'))['total'] or 0
+            completed_units = enrollments.filter(final_grade__isnull=False).count()
+            failed_units = enrollments.filter(final_grade__grade='F').count()
+            
+            ws.append([
+                student.registration_number,
+                f"{student.first_name} {student.last_name}",
+                student.programme.code,
+                student.current_year,
+                gpa,
+                classification,
+                total_credits,
+                completed_units,
+                failed_units
+            ])
+    
+    # Adjust column widths
+    for column in ws.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        ws.column_dimensions[column_letter].width = adjusted_width
+    
+    # Save to BytesIO
+    excel_file = BytesIO()
+    wb.save(excel_file)
+    excel_file.seek(0)
+    
+    response = HttpResponse(
+        excel_file.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="student_progression.xlsx"'
+    
+    return response

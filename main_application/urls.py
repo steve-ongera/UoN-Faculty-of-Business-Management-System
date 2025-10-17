@@ -179,5 +179,10 @@ urlpatterns = [
     path('fee-payments/<int:pk>/', views.fee_payment_detail, name='fee_payment_detail'),
     path('fee-statements/', views.fee_statement_list, name='fee_statement_list'),
     path('fee-statements/<int:student_id>/<int:semester_id>/', views.fee_statement_detail, name='fee_statement_detail'),
+
+    # Student Progression URLs
+    path('progression/', views.student_progression_list, name='student_progression_list'),
+    path('progression/<str:registration_number>/', views.student_progression_detail, name='student_progression_detail'),
+    path('progression/export/', views.export_student_progression, name='export_student_progression'),
 ]
 
