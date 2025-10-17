@@ -9712,3 +9712,420 @@ def api_lecturer_allocations(request, lecturer_id):
     } for alloc in allocations]
     
     return JsonResponse({'results': results})
+
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.core.paginator import Paginator
+from django.db.models import Q, Count
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.db import transaction
+from .models import Department, User, Programme, Unit, Lecturer
+import json
+
+@login_required
+def department_list(request):
+    """List all departments with filters and search"""
+
+    # Filters
+    search = request.GET.get('search', '')
+    sort_by = request.GET.get('sort', 'name')
+
+    # Query departments with annotations
+    departments = (
+        Department.objects.annotate(
+            programme_count=Count('programmes', distinct=True),
+            unit_count=Count('units', distinct=True),
+            lecturer_count=Count('lecturers', distinct=True),
+        )
+        .select_related('head_of_department', 'head_of_department__lecturer_profile')
+    )
+
+    # Search filter
+    if search:
+        departments = departments.filter(
+            Q(name__icontains=search)
+            | Q(code__icontains=search)
+            | Q(description__icontains=search)
+        )
+
+    # Sorting
+    valid_sort_fields = ['name', 'code', '-created_at', 'created_at']
+    if sort_by in valid_sort_fields:
+        departments = departments.order_by(sort_by)
+    else:
+        departments = departments.order_by('name')
+
+    # Pagination
+    paginator = Paginator(departments, 15)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    # Summary statistics
+    total_departments = Department.objects.count()
+    with_heads = Department.objects.exclude(head_of_department__isnull=True).count()
+    without_heads = Department.objects.filter(head_of_department__isnull=True).count()
+
+    context = {
+        'departments': page_obj,
+        'search_query': search,
+        'sort_by': sort_by,
+        'total_departments': total_departments,
+        'with_heads': with_heads,
+        'without_heads': without_heads,
+    }
+
+    return render(request, 'department/department_list.html', context)
+
+
+
+@login_required
+def department_detail(request, code):
+    """View department details"""
+
+    department = get_object_or_404(
+        Department.objects.annotate(
+            programme_count=Count('programmes', distinct=True),
+            unit_count=Count('units', distinct=True),
+            lecturer_count=Count('lecturers', distinct=True)
+        ).select_related('head_of_department'),
+        code=code
+    )
+
+    # Related data
+    programmes = department.programmes.filter(is_active=True).order_by('level', 'name')
+    all_units = department.units.order_by('code')
+    units = all_units[:10]  # ✅ only slice for display
+    lecturers = (
+        department.lecturers.filter(is_active=True)
+        .select_related('user')
+        .order_by('user__first_name')
+    )
+
+    # Programme statistics
+    programme_by_level = programmes.values('level').annotate(count=Count('id')).order_by('level')
+
+    # Unit statistics (✅ count from full queryset)
+    core_units = all_units.filter(is_core=True).count()
+    elective_units = all_units.filter(is_core=False).count()
+    total_units = all_units.count()
+
+    context = {
+        'department': department,
+        'programmes': programmes,
+        'units': units,
+        'lecturers': lecturers,
+        'programme_by_level': programme_by_level,
+        'core_units': core_units,
+        'elective_units': elective_units,
+        'total_units': total_units,
+    }
+
+    return render(request, 'department/department_detail.html', context)
+
+@login_required
+def department_create(request):
+    """Create new department"""
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        code = request.POST.get('code', '').strip().upper()
+        description = request.POST.get('description', '').strip()
+        head_of_department_id = request.POST.get('head_of_department', '')
+        
+        # Validation
+        if not name or not code:
+            messages.error(request, 'Department name and code are required.')
+            return redirect('department_create')
+        
+        # Check if code already exists
+        if Department.objects.filter(code=code).exists():
+            messages.error(request, f'Department with code "{code}" already exists.')
+            return redirect('department_create')
+        
+        try:
+            with transaction.atomic():
+                department = Department.objects.create(
+                    name=name,
+                    code=code,
+                    description=description
+                )
+                
+                # Assign head if provided
+                if head_of_department_id:
+                    try:
+                        head = User.objects.get(id=head_of_department_id, user_type='COD')
+                        department.head_of_department = head
+                        department.save()
+                    except User.DoesNotExist:
+                        pass
+                
+                messages.success(request, f'Department "{name}" created successfully!')
+                return redirect('department_detail', code=department.code)
+                
+        except Exception as e:
+            messages.error(request, f'Error creating department: {str(e)}')
+            return redirect('department_create')
+    
+    # GET request - show form
+    # Get available CODs (not already assigned as heads)
+    assigned_head_ids = Department.objects.exclude(
+        head_of_department__isnull=True
+    ).values_list('head_of_department_id', flat=True)
+    
+    available_cods = User.objects.filter(
+        user_type='COD',
+        is_active_user=True
+    ).exclude(id__in=assigned_head_ids).order_by('first_name', 'last_name')
+    
+    context = {
+        'available_cods': available_cods,
+    }
+    
+    return render(request, 'admin/department_form.html', context)
+
+
+@login_required
+def department_update(request, code):
+    """Update department"""
+    department = get_object_or_404(Department, code=code)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        new_code = request.POST.get('code', '').strip().upper()
+        description = request.POST.get('description', '').strip()
+        head_of_department_id = request.POST.get('head_of_department', '')
+        
+        # Validation
+        if not name or not new_code:
+            messages.error(request, 'Department name and code are required.')
+            return redirect('department_update', code=code)
+        
+        # Check if new code already exists (excluding current department)
+        if new_code != code and Department.objects.filter(code=new_code).exists():
+            messages.error(request, f'Department with code "{new_code}" already exists.')
+            return redirect('department_update', code=code)
+        
+        try:
+            with transaction.atomic():
+                department.name = name
+                department.code = new_code
+                department.description = description
+                
+                # Update head
+                if head_of_department_id:
+                    try:
+                        head = User.objects.get(id=head_of_department_id, user_type='COD')
+                        department.head_of_department = head
+                    except User.DoesNotExist:
+                        department.head_of_department = None
+                else:
+                    department.head_of_department = None
+                
+                department.save()
+                
+                messages.success(request, f'Department "{name}" updated successfully!')
+                return redirect('department_detail', code=department.code)
+                
+        except Exception as e:
+            messages.error(request, f'Error updating department: {str(e)}')
+            return redirect('department_update', code=code)
+    
+    # GET request - show form
+    # Get available CODs
+    assigned_head_ids = Department.objects.exclude(
+        head_of_department__isnull=True
+    ).exclude(id=department.id).values_list('head_of_department_id', flat=True)
+    
+    available_cods = User.objects.filter(
+        user_type='COD',
+        is_active_user=True
+    ).exclude(id__in=assigned_head_ids).order_by('first_name', 'last_name')
+    
+    context = {
+        'department': department,
+        'available_cods': available_cods,
+        'is_update': True,
+    }
+    
+    return render(request, 'department/department_form.html', context)
+
+
+@login_required
+def department_delete(request, code):
+    """Delete department"""
+    department = get_object_or_404(Department, code=code)
+    
+    if request.method == 'POST':
+        # Check if department has related data
+        has_programmes = department.programmes.exists()
+        has_units = department.units.exists()
+        has_lecturers = department.lecturers.exists()
+        
+        if has_programmes or has_units or has_lecturers:
+            messages.error(
+                request,
+                f'Cannot delete department "{department.name}". '
+                'It has associated programmes, units, or lecturers. '
+                'Please remove or reassign them first.'
+            )
+            return redirect('department_detail', code=code)
+        
+        try:
+            dept_name = department.name
+            department.delete()
+            messages.success(request, f'Department "{dept_name}" deleted successfully!')
+            return redirect('department_list')
+        except Exception as e:
+            messages.error(request, f'Error deleting department: {str(e)}')
+            return redirect('department_detail', code=code)
+    
+    # GET request - show confirmation page
+    # Count related objects
+    programme_count = department.programmes.count()
+    unit_count = department.units.count()
+    lecturer_count = department.lecturers.count()
+    
+    context = {
+        'department': department,
+        'programme_count': programme_count,
+        'unit_count': unit_count,
+        'lecturer_count': lecturer_count,
+        'can_delete': programme_count == 0 and unit_count == 0 and lecturer_count == 0,
+    }
+    
+    return render(request, 'department/department_confirm_delete.html', context)
+
+
+# AJAX API Endpoints
+
+@login_required
+def api_search_departments(request):
+    """Search departments for autocomplete"""
+    query = request.GET.get('q', '')
+    
+    departments = Department.objects.filter(
+        Q(name__icontains=query) | Q(code__icontains=query)
+    ).order_by('name')[:20]
+    
+    results = [{
+        'id': dept.id,
+        'code': dept.code,
+        'name': dept.name,
+        'head': dept.head_of_department.get_full_name() if dept.head_of_department else 'No Head'
+    } for dept in departments]
+    
+    return JsonResponse({'results': results})
+
+
+@login_required
+def api_search_cods(request):
+    """Search CODs (Chairmen of Department) for autocomplete"""
+    query = request.GET.get('q', '')
+    exclude_assigned = request.GET.get('exclude_assigned', 'true') == 'true'
+    current_dept_id = request.GET.get('current_dept', '')
+    
+    cods = User.objects.filter(
+        user_type='COD',
+        is_active_user=True
+    ).filter(
+        Q(first_name__icontains=query) |
+        Q(last_name__icontains=query) |
+        Q(username__icontains=query)
+    )
+    
+    if exclude_assigned:
+        # Exclude CODs already assigned as heads
+        assigned_ids = Department.objects.exclude(
+            head_of_department__isnull=True
+        )
+        
+        if current_dept_id:
+            assigned_ids = assigned_ids.exclude(id=current_dept_id)
+        
+        assigned_ids = assigned_ids.values_list('head_of_department_id', flat=True)
+        cods = cods.exclude(id__in=assigned_ids)
+    
+    cods = cods.order_by('first_name', 'last_name')[:20]
+    
+    results = [{
+        'id': cod.id,
+        'username': cod.username,
+        'name': cod.get_full_name(),
+        'email': cod.email
+    } for cod in cods]
+    
+    return JsonResponse({'results': results})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_department_quick_update(request, code):
+    """Quick update department via AJAX"""
+    try:
+        department = get_object_or_404(Department, code=code)
+        data = json.loads(request.body)
+        
+        field = data.get('field')
+        value = data.get('value')
+        
+        if field == 'name':
+            department.name = value
+        elif field == 'description':
+            department.description = value
+        elif field == 'head_of_department':
+            if value:
+                head = get_object_or_404(User, id=value, user_type='COD')
+                department.head_of_department = head
+            else:
+                department.head_of_department = None
+        else:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid field'
+            }, status=400)
+        
+        department.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Department updated successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+def api_department_stats(request, code):
+    """Get department statistics"""
+    department = get_object_or_404(Department, code=code)
+    
+    programmes = department.programmes.all()
+    units = department.units.all()
+    lecturers = department.lecturers.filter(is_active=True)
+    
+    # Programme breakdown
+    programme_levels = programmes.values('level').annotate(
+        count=Count('id')
+    ).order_by('level')
+    
+    # Unit breakdown
+    core_units = units.filter(is_core=True).count()
+    elective_units = units.filter(is_core=False).count()
+    
+    stats = {
+        'total_programmes': programmes.count(),
+        'active_programmes': programmes.filter(is_active=True).count(),
+        'total_units': units.count(),
+        'core_units': core_units,
+        'elective_units': elective_units,
+        'total_lecturers': lecturers.count(),
+        'programme_levels': list(programme_levels),
+    }
+    
+    return JsonResponse(stats)

@@ -1,0 +1,367 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Delete Department - {{ department.code }}{% endblock %}
+
+{% block page_title %}Delete Department{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+        border: 1px solid #E2E8F0;
+        max-width: 700px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .warning-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .warning-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: #FEE2E2;
+        color: #DC2626;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        margin: 0 auto 20px;
+    }
+
+    .warning-header h2 {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 10px;
+    }
+
+    .warning-header p {
+        color: #64748B;
+        font-size: 14px;
+    }
+
+    .department-info {
+        background: #F8FAFC;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #E2E8F0;
+        margin-bottom: 25px;
+    }
+
+    .department-info h3 {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 8px;
+    }
+
+    .department-info .code {
+        font-size: 14px;
+        color: #64748B;
+        margin-bottom: 15px;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .info-item {
+        text-align: center;
+    }
+
+    .info-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #4F46E5;
+        margin-bottom: 5px;
+    }
+
+    .info-label {
+        font-size: 12px;
+        color: #64748B;
+        text-transform: uppercase;
+    }
+
+    .alert {
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: start;
+        gap: 12px;
+    }
+
+    .alert-danger {
+        background: #FEE2E2;
+        color: #991B1B;
+        border: 2px solid #FECACA;
+    }
+
+    .alert-warning {
+        background: #FEF3C7;
+        color: #92400E;
+        border: 2px solid #FDE68A;
+    }
+
+    .alert i {
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .alert-content {
+        flex: 1;
+    }
+
+    .alert-content h4 {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .alert-content p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .alert-content ul {
+        margin: 10px 0 0 0;
+        padding-left: 20px;
+    }
+
+    .alert-content ul li {
+        margin-bottom: 5px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 30px;
+        padding-top: 25px;
+        border-top: 1px solid #F1F5F9;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+    }
+
+    .btn-secondary {
+        background: #E2E8F0;
+        color: #475569;
+    }
+
+    .btn-secondary:hover {
+        background: #CBD5E1;
+    }
+
+    .btn-danger {
+        background: #EF4444;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #DC2626;
+    }
+
+    .btn:disabled {
+        background: #E2E8F0;
+        color: #94A3B8;
+        cursor: not-allowed;
+    }
+
+    @media (max-width: 768px) {
+        .section-container {
+            padding: 20px;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .form-actions {
+            flex-direction: column-reverse;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'department_list' %}">Departments</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'department_detail' department.code %}">{{ department.code }}</a></li>
+        <li class="breadcrumb-item active">Delete</li>
+    </ol>
+</nav>
+
+<!-- Delete Confirmation Container -->
+<div class="section-container">
+    <div class="warning-header">
+        <div class="warning-icon">
+            <i class="bi bi-exclamation-triangle"></i>
+        </div>
+        <h2>Delete Department?</h2>
+        <p>This action cannot be undone. Please review carefully.</p>
+    </div>
+
+    <!-- Department Information -->
+    <div class="department-info">
+        <h3>{{ department.name }}</h3>
+        <div class="code">Code: {{ department.code }}</div>
+        
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-value">{{ programme_count }}</div>
+                <div class="info-label">Programmes</div>
+            </div>
+            <div class="info-item">
+                <div class="info-value">{{ unit_count }}</div>
+                <div class="info-label">Units</div>
+            </div>
+            <div class="info-item">
+                <div class="info-value">{{ lecturer_count }}</div>
+                <div class="info-label">Lecturers</div>
+            </div>
+        </div>
+    </div>
+
+    {% if not can_delete %}
+    <!-- Cannot Delete Warning -->
+    <div class="alert alert-danger">
+        <i class="bi bi-x-circle-fill"></i>
+        <div class="alert-content">
+            <h4>Cannot Delete Department</h4>
+            <p>This department cannot be deleted because it has associated data:</p>
+            <ul>
+                {% if programme_count > 0 %}
+                <li><strong>{{ programme_count }}</strong> programme(s) are assigned to this department</li>
+                {% endif %}
+                {% if unit_count > 0 %}
+                <li><strong>{{ unit_count }}</strong> unit(s) are assigned to this department</li>
+                {% endif %}
+                {% if lecturer_count > 0 %}
+                <li><strong>{{ lecturer_count }}</strong> lecturer(s) are assigned to this department</li>
+                {% endif %}
+            </ul>
+            <p style="margin-top: 15px;">Please remove or reassign all associated programmes, units, and lecturers before deleting this department.</p>
+        </div>
+    </div>
+
+    <!-- Actions for Cannot Delete -->
+    <div class="form-actions">
+        <a href="{% url 'department_detail' department.code %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Department
+        </a>
+    </div>
+
+    {% else %}
+    <!-- Can Delete Confirmation -->
+    <div class="alert alert-warning">
+        <i class="bi bi-info-circle-fill"></i>
+        <div class="alert-content">
+            <h4>Confirm Deletion</h4>
+            <p>You are about to permanently delete the department <strong>{{ department.name }} ({{ department.code }})</strong>.</p>
+            <p style="margin-top: 10px;">This department has no associated programmes, units, or lecturers, so it is safe to delete.</p>
+        </div>
+    </div>
+
+    <!-- Delete Form -->
+    <form method="post" id="deleteForm">
+        {% csrf_token %}
+        
+        <div class="form-actions">
+            <a href="{% url 'department_detail' department.code %}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-danger" id="deleteBtn">
+                <i class="bi bi-trash"></i> Yes, Delete Department
+            </button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% if can_delete %}
+// Confirm deletion
+document.getElementById('deleteForm').addEventListener('submit', function(e) {
+    const confirmed = confirm('Are you absolutely sure you want to delete this department? This action cannot be undone.');
+    
+    if (!confirmed) {
+        e.preventDefault();
+        return false;
+    }
+    
+    // Disable button to prevent double submission
+    const btn = document.getElementById('deleteBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Deleting...';
+});
+{% endif %}
+
+console.log('Department delete confirmation loaded');
+</script>
+{% endblock %}

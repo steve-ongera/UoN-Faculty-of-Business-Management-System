@@ -1,0 +1,513 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}{% if is_update %}Edit{% else %}Create{% endif %} Department{% endblock %}
+
+{% block page_title %}{% if is_update %}Edit{% else %}Create{% endif %} Department{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+<style>
+    .breadcrumb {
+        padding: 0;
+        margin-bottom: 20px;
+        font-size: 14px;
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+        color: #64748B;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "/ ";
+        color: #94A3B8;
+        padding: 0 8px;
+    }
+
+    .breadcrumb-item.active {
+        color: #1E293B;
+        font-weight: 500;
+    }
+
+    .breadcrumb a {
+        color: #4F46E5;
+        text-decoration: none;
+    }
+
+    .section-container {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+        border: 1px solid #E2E8F0;
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .form-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .form-header h2 {
+        font-size: 28px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 10px;
+    }
+
+    .form-header p {
+        color: #64748B;
+        font-size: 14px;
+    }
+
+    .form-group {
+        margin-bottom: 25px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 8px;
+    }
+
+    .required {
+        color: #EF4444;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #E2E8F0;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        font-family: inherit;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .form-control:disabled {
+        background: #F8FAFC;
+        cursor: not-allowed;
+    }
+
+    textarea.form-control {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .form-text {
+        font-size: 12px;
+        color: #64748B;
+        margin-top: 6px;
+        display: block;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #F1F5F9;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+    }
+
+    .btn-primary {
+        background: #4F46E5;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #4338CA;
+    }
+
+    .btn-secondary {
+        background: #E2E8F0;
+        color: #475569;
+    }
+
+    .btn-secondary:hover {
+        background: #CBD5E1;
+    }
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .alert-success {
+        background: #D1FAE5;
+        color: #065F46;
+        border: 1px solid #A7F3D0;
+    }
+
+    .alert-error {
+        background: #FEE2E2;
+        color: #991B1B;
+        border: 1px solid #FECACA;
+    }
+
+    .autocomplete-container {
+        position: relative;
+    }
+
+    .autocomplete-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #E2E8F0;
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 100;
+        display: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .autocomplete-results.show {
+        display: block;
+    }
+
+    .autocomplete-item {
+        padding: 12px 16px;
+        cursor: pointer;
+        border-bottom: 1px solid #F1F5F9;
+        transition: background 0.2s ease;
+    }
+
+    .autocomplete-item:hover {
+        background: #F8FAFC;
+    }
+
+    .autocomplete-item-title {
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 4px;
+    }
+
+    .autocomplete-item-subtitle {
+        font-size: 12px;
+        color: #64748B;
+    }
+
+    .selected-cod {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #EEF2FF;
+        border: 1px solid #C7D2FE;
+        border-radius: 6px;
+        color: #4F46E5;
+        font-size: 14px;
+        margin-top: 8px;
+    }
+
+    .selected-cod .remove-btn {
+        background: transparent;
+        border: none;
+        color: #4F46E5;
+        cursor: pointer;
+        padding: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .selected-cod .remove-btn:hover {
+        color: #4338CA;
+    }
+
+    @media (max-width: 768px) {
+        .section-container {
+            padding: 20px;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}"><i class="bi bi-house-door"></i> Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'department_list' %}">Departments</a></li>
+        {% if is_update %}
+        <li class="breadcrumb-item"><a href="{% url 'department_detail' department.code %}">{{ department.code }}</a></li>
+        <li class="breadcrumb-item active">Edit</li>
+        {% else %}
+        <li class="breadcrumb-item active">Create</li>
+        {% endif %}
+    </ol>
+</nav>
+
+<!-- Form Container -->
+<div class="section-container">
+    <div class="form-header">
+        <h2>
+            <i class="bi bi-{% if is_update %}pencil-square{% else %}plus-circle{% endif %}"></i>
+            {% if is_update %}Edit Department{% else %}Create New Department{% endif %}
+        </h2>
+        <p>{% if is_update %}Update the department information below{% else %}Fill in the details to create a new department{% endif %}</p>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                <i class="bi bi-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" id="departmentForm">
+        {% csrf_token %}
+
+        <!-- Department Name -->
+        <div class="form-group">
+            <label for="name">
+                Department Name <span class="required">*</span>
+            </label>
+            <input 
+                type="text" 
+                id="name" 
+                name="name" 
+                class="form-control" 
+                value="{% if is_update %}{{ department.name }}{% endif %}"
+                placeholder="e.g., Department of Business Administration"
+                required
+            >
+            <small class="form-text">Enter the full name of the department</small>
+        </div>
+
+        <!-- Department Code -->
+        <div class="form-group">
+            <label for="code">
+                Department Code <span class="required">*</span>
+            </label>
+            <input 
+                type="text" 
+                id="code" 
+                name="code" 
+                class="form-control" 
+                value="{% if is_update %}{{ department.code }}{% endif %}"
+                placeholder="e.g., DBA"
+                style="text-transform: uppercase;"
+                maxlength="20"
+                required
+            >
+            <small class="form-text">A unique code to identify this department (will be converted to uppercase)</small>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+            <label for="description">
+                Description
+            </label>
+            <textarea 
+                id="description" 
+                name="description" 
+                class="form-control"
+                placeholder="Enter a brief description of the department..."
+            >{% if is_update %}{{ department.description }}{% endif %}</textarea>
+            <small class="form-text">Provide additional information about the department (optional)</small>
+        </div>
+
+        <!-- Head of Department -->
+        <div class="form-group">
+            <label for="head_of_department_search">
+                Head of Department (COD)
+            </label>
+            <div class="autocomplete-container">
+                <input 
+                    type="text" 
+                    id="head_of_department_search" 
+                    class="form-control"
+                    placeholder="Search for COD by name..."
+                    autocomplete="off"
+                >
+                <input type="hidden" id="head_of_department" name="head_of_department" value="{% if is_update and department.head_of_department %}{{ department.head_of_department.id }}{% endif %}">
+                <div class="autocomplete-results" id="codResults"></div>
+            </div>
+            
+            <!-- Selected COD Display -->
+            <div id="selectedCodDisplay">
+                {% if is_update and department.head_of_department %}
+                <div class="selected-cod">
+                    <i class="bi bi-person-check"></i>
+                    <span>{{ department.head_of_department.get_full_name }} ({{ department.head_of_department.username }})</span>
+                    <button type="button" class="remove-btn" onclick="removeCod()">
+                        <i class="bi bi-x-circle"></i>
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            
+            <small class="form-text">Assign a Chairman of Department (optional)</small>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <a href="{% if is_update %}{% url 'department_detail' department.code %}{% else %}{% url 'department_list' %}{% endif %}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle"></i> {% if is_update %}Update Department{% else %}Create Department{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-uppercase code input
+document.getElementById('code').addEventListener('input', function() {
+    this.value = this.value.toUpperCase();
+});
+
+// COD Autocomplete
+let codSearchTimeout;
+const codSearchInput = document.getElementById('head_of_department_search');
+const codResults = document.getElementById('codResults');
+const codHiddenInput = document.getElementById('head_of_department');
+const selectedCodDisplay = document.getElementById('selectedCodDisplay');
+
+codSearchInput.addEventListener('input', function() {
+    clearTimeout(codSearchTimeout);
+    const query = this.value;
+    
+    if (query.length < 2) {
+        codResults.classList.remove('show');
+        return;
+    }
+    
+    codSearchTimeout = setTimeout(() => {
+        searchCods(query);
+    }, 300);
+});
+
+function searchCods(query) {
+    const currentDeptId = '{% if is_update %}{{ department.id }}{% endif %}';
+    
+    fetch(`/api/departments/cods/search/?q=${encodeURIComponent(query)}&current_dept=${currentDeptId}`)
+        .then(response => response.json())
+        .then(data => {
+            codResults.innerHTML = '';
+            
+            if (data.results.length === 0) {
+                codResults.innerHTML = '<div class="autocomplete-item">No CODs found</div>';
+            } else {
+                data.results.forEach(cod => {
+                    const div = document.createElement('div');
+                    div.className = 'autocomplete-item';
+                    div.innerHTML = `
+                        <div class="autocomplete-item-title">${cod.name}</div>
+                        <div class="autocomplete-item-subtitle">
+                            ${cod.username} | ${cod.email}
+                        </div>
+                    `;
+                    div.onclick = () => selectCod(cod);
+                    codResults.appendChild(div);
+                });
+            }
+            
+            codResults.classList.add('show');
+        })
+        .catch(error => {
+            console.error('Error searching CODs:', error);
+        });
+}
+
+function selectCod(cod) {
+    codHiddenInput.value = cod.id;
+    codSearchInput.value = '';
+    codResults.classList.remove('show');
+    
+    selectedCodDisplay.innerHTML = `
+        <div class="selected-cod">
+            <i class="bi bi-person-check"></i>
+            <span>${cod.name} (${cod.username})</span>
+            <button type="button" class="remove-btn" onclick="removeCod()">
+                <i class="bi bi-x-circle"></i>
+            </button>
+        </div>
+    `;
+}
+
+function removeCod() {
+    codHiddenInput.value = '';
+    selectedCodDisplay.innerHTML = '';
+}
+
+// Close autocomplete when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.autocomplete-container')) {
+        codResults.classList.remove('show');
+    }
+});
+
+// Form validation
+document.getElementById('departmentForm').addEventListener('submit', function(e) {
+    const name = document.getElementById('name').value.trim();
+    const code = document.getElementById('code').value.trim();
+    
+    if (!name || !code) {
+        e.preventDefault();
+        alert('Please fill in all required fields (Name and Code)');
+        return false;
+    }
+    
+    if (code.length < 2) {
+        e.preventDefault();
+        alert('Department code must be at least 2 characters long');
+        return false;
+    }
+});
+
+console.log('Department form loaded');
+</script>
+{% endblock %}

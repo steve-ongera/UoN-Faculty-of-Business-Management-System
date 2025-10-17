@@ -212,7 +212,18 @@ urlpatterns = [
     path('api/programmes/', views.api_get_programmes, name='api_get_programmes'),
     path('api/check-allocation/', views.api_check_allocation, name='api_check_allocation'),
     path('api/lecturers/<int:lecturer_id>/allocations/', views.api_lecturer_allocations, name='api_lecturer_allocations'),
-
+    
+    # Department CRUD
+    path('departments/', views.department_list, name='department_list'),
+    path('departments/create/', views.department_create, name='department_create'),
+    path('departments/<str:code>/', views.department_detail, name='department_detail'),
+    path('departments/<str:code>/update/', views.department_update, name='department_update'),
+    path('departments/<str:code>/delete/', views.department_delete, name='department_delete'),
+    path('api/departments/search/', views.api_search_departments, name='api_search_departments'),
+    path('api/departments/cods/search/', views.api_search_cods, name='api_search_cods'),
+    path('api/departments/<str:code>/quick-update/', views.api_department_quick_update, name='api_department_quick_update'),
+    path('api/departments/<str:code>/stats/', views.api_department_stats, name='api_department_stats'),
+    
 ]
 
 
