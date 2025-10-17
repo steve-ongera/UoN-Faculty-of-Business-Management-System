@@ -556,7 +556,7 @@
                 <a href="{% url 'student_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'student_list' %}active{% endif %}">All Students</a>
                 <a href="{% url 'student_create'%}" class="submenu-item {% if request.resolver_match.url_name == 'student_create' %}active{% endif %}">Add New Student</a>
                 <a href="{% url 'student_progression_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'student_progression_list' %}active{% endif %}">Student Progression</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'enrollment_management' %}active{% endif %}">Enrollment Management</a>
+                <a href="{% url 'enrollment_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'enrollment_list' %}active{% endif %}">Enrollment Management</a>
             </div>
 
             <div class="menu-item has-submenu {% if 'lecturer' in request.resolver_match.url_name %}active{% endif %}" data-submenu="lecturers">
@@ -566,8 +566,8 @@
             </div>
             <div class="submenu" id="submenu-lecturers">
                 <a href="{% url 'lecturer_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'lecturer_list' %}active{% endif %}">All Lecturers</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'add_lecturer' %}active{% endif %}">Add New Lecturer</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'unit_allocations' %}active{% endif %}">Unit Allocations</a>
+                <a href="{% url 'lecturer_create'%}" class="submenu-item {% if request.resolver_match.url_name == 'lecturer_create' %}active{% endif %}">Add New Lecturer</a>
+                <a href="{% url 'unit_allocation_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'unit_allocation_list' %}active{% endif %}">Unit Allocations</a>
             </div>
 
             <div class="menu-item has-submenu {% if 'programme' in request.resolver_match.url_name or 'departments' in request.resolver_match.url_name %}active{% endif %}" data-submenu="programmes">
@@ -588,8 +588,7 @@
             </div>
             <div class="submenu" id="submenu-units">
                 <a href="{% url 'unit_management'%}" class="submenu-item {% if request.resolver_match.url_name == 'unit_management' %}active{% endif %}">All Units</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'add_unit' %}active{% endif %}">Add New Unit</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'unit_enrollments' %}active{% endif %}">Unit Enrollments</a>
+                <a href="{% url 'enrollment_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'enrollment_list' %}active{% endif %}">Unit Enrollments</a>
             </div>
             <!-- Academic Management -->
              <a href="{% url 'academic_management'%}" class="menu-item {% if request.resolver_match.url_name == 'academic_management' %}active{% endif %}">

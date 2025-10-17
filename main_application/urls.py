@@ -197,5 +197,22 @@ urlpatterns = [
     path('api/programme-units/', views.get_programme_units, name='get_programme_units'),
     path('api/students-count/', views.get_students_count, name='get_students_count'),
     path('api/check-conflicts/', views.check_enrollment_conflicts, name='check_enrollment_conflicts'),
+
+    # Main allocation management
+    path('unit-allocations/', views.unit_allocation_list, name='unit_allocation_list'),
+    path('unit-allocations/create/', views.unit_allocation_create, name='unit_allocation_create'),
+    path('unit-allocations/bulk-create/', views.unit_allocation_bulk_create, name='unit_allocation_bulk_create'),
+    path('unit-allocations/<int:allocation_id>/update/', views.unit_allocation_update, name='unit_allocation_update'),
+    path('unit-allocations/<int:allocation_id>/delete/', views.unit_allocation_delete, name='unit_allocation_delete'),
+    path('unit-allocations/<int:allocation_id>/toggle-status/', views.unit_allocation_toggle_status, name='unit_allocation_toggle_status'),
+    
+    # API endpoints for AJAX
+    path('api/units/search/', views.api_search_units, name='api_search_units'),
+    path('api/lecturers/search/', views.api_search_lecturers, name='api_search_lecturers'),
+    path('api/programmes/', views.api_get_programmes, name='api_get_programmes'),
+    path('api/check-allocation/', views.api_check_allocation, name='api_check_allocation'),
+    path('api/lecturers/<int:lecturer_id>/allocations/', views.api_lecturer_allocations, name='api_lecturer_allocations'),
+
 ]
+
 

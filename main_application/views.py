@@ -9237,3 +9237,478 @@ def enrollment_detail(request, enrollment_id):
     }
     
     return render(request, 'enrollments/enrollment_detail.html', context)
+
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.db.models import Q, Count, Prefetch
+from django.views.decorators.http import require_http_methods
+from django.contrib import messages
+from django.core.paginator import Paginator
+from django.db import transaction
+from .models import (
+    UnitAllocation, Unit, Lecturer, Semester, Programme,
+    AcademicYear, Department
+)
+import json
+
+
+@login_required
+def unit_allocation_list(request):
+    """Main view for unit allocation management"""
+    # Get current semester or latest
+    current_semester = Semester.objects.filter(is_current=True).first()
+    if not current_semester:
+        current_semester = Semester.objects.order_by('-start_date').first()
+    
+    # Get filter parameters
+    semester_id = request.GET.get('semester', current_semester.id if current_semester else None)
+    department_id = request.GET.get('department', '')
+    lecturer_id = request.GET.get('lecturer', '')
+    unit_id = request.GET.get('unit', '')
+    status = request.GET.get('status', '')
+    search = request.GET.get('search', '')
+    
+    # Base queryset with prefetch
+    allocations = UnitAllocation.objects.select_related(
+        'unit', 'lecturer', 'lecturer__user', 'lecturer__department', 'semester'
+    ).prefetch_related('programmes')
+    
+    # Apply filters
+    if semester_id:
+        allocations = allocations.filter(semester_id=semester_id)
+    
+    if department_id:
+        allocations = allocations.filter(lecturer__department_id=department_id)
+    
+    if lecturer_id:
+        allocations = allocations.filter(lecturer_id=lecturer_id)
+    
+    if unit_id:
+        allocations = allocations.filter(unit_id=unit_id)
+    
+    if status:
+        allocations = allocations.filter(is_active=(status == 'active'))
+    
+    if search:
+        allocations = allocations.filter(
+            Q(unit__code__icontains=search) |
+            Q(unit__name__icontains=search) |
+            Q(lecturer__staff_number__icontains=search) |
+            Q(lecturer__user__first_name__icontains=search) |
+            Q(lecturer__user__last_name__icontains=search)
+        )
+    
+    # Order by date
+    allocations = allocations.order_by('-allocated_date')
+    
+    # Pagination
+    paginator = Paginator(allocations, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Get filter options
+    semesters = Semester.objects.order_by('-start_date')
+    departments = Department.objects.order_by('name')
+    
+    # Statistics
+    total_allocations = allocations.count()
+    active_allocations = allocations.filter(is_active=True).count()
+    inactive_allocations = allocations.filter(is_active=False).count()
+    
+    context = {
+        'allocations': page_obj,
+        'semesters': semesters,
+        'departments': departments,
+        'current_semester': current_semester,
+        'selected_semester': semester_id,
+        'selected_department': department_id,
+        'selected_lecturer': lecturer_id,
+        'selected_unit': unit_id,
+        'selected_status': status,
+        'search_query': search,
+        'total_allocations': total_allocations,
+        'active_allocations': active_allocations,
+        'inactive_allocations': inactive_allocations,
+    }
+    
+    return render(request, 'admin/unit_allocation_list.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def unit_allocation_create(request):
+    """Create new unit allocation via AJAX"""
+    try:
+        data = json.loads(request.body)
+        
+        unit_id = data.get('unit_id')
+        lecturer_id = data.get('lecturer_id')
+        semester_id = data.get('semester_id')
+        programme_ids = data.get('programme_ids', [])
+        
+        # Validate required fields
+        if not all([unit_id, lecturer_id, semester_id]):
+            return JsonResponse({
+                'success': False,
+                'message': 'Unit, Lecturer, and Semester are required.'
+            }, status=400)
+        
+        # Get objects
+        unit = get_object_or_404(Unit, id=unit_id)
+        lecturer = get_object_or_404(Lecturer, user_id=lecturer_id)
+        semester = get_object_or_404(Semester, id=semester_id)
+        
+        # Check if allocation already exists
+        existing = UnitAllocation.objects.filter(
+            unit=unit,
+            lecturer=lecturer,
+            semester=semester
+        ).first()
+        
+        if existing:
+            return JsonResponse({
+                'success': False,
+                'message': f'This unit is already allocated to {lecturer.user.get_full_name()} for this semester.'
+            }, status=400)
+        
+        # Create allocation
+        with transaction.atomic():
+            allocation = UnitAllocation.objects.create(
+                unit=unit,
+                lecturer=lecturer,
+                semester=semester,
+                is_active=True
+            )
+            
+            # Add programmes
+            if programme_ids:
+                programmes = Programme.objects.filter(id__in=programme_ids)
+                allocation.programmes.set(programmes)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Unit allocated successfully!',
+            'allocation': {
+                'id': allocation.id,
+                'unit_code': unit.code,
+                'unit_name': unit.name,
+                'lecturer_name': lecturer.user.get_full_name(),
+                'semester': str(semester),
+                'allocated_date': allocation.allocated_date.strftime('%d %b %Y %H:%M')
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON data.'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def unit_allocation_bulk_create(request):
+    """Create multiple unit allocations at once"""
+    try:
+        data = json.loads(request.body)
+        
+        unit_ids = data.get('unit_ids', [])
+        lecturer_id = data.get('lecturer_id')
+        semester_id = data.get('semester_id')
+        programme_ids = data.get('programme_ids', [])
+        
+        if not unit_ids or not lecturer_id or not semester_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Units, Lecturer, and Semester are required.'
+            }, status=400)
+        
+        lecturer = get_object_or_404(Lecturer, user_id=lecturer_id)
+        semester = get_object_or_404(Semester, id=semester_id)
+        programmes = Programme.objects.filter(id__in=programme_ids)
+        
+        created_count = 0
+        skipped_count = 0
+        skipped_units = []
+        
+        with transaction.atomic():
+            for unit_id in unit_ids:
+                unit = get_object_or_404(Unit, id=unit_id)
+                
+                # Check if already allocated
+                existing = UnitAllocation.objects.filter(
+                    unit=unit,
+                    lecturer=lecturer,
+                    semester=semester
+                ).exists()
+                
+                if existing:
+                    skipped_count += 1
+                    skipped_units.append(unit.code)
+                    continue
+                
+                # Create allocation
+                allocation = UnitAllocation.objects.create(
+                    unit=unit,
+                    lecturer=lecturer,
+                    semester=semester,
+                    is_active=True
+                )
+                
+                if programme_ids:
+                    allocation.programmes.set(programmes)
+                
+                created_count += 1
+        
+        message = f'{created_count} unit(s) allocated successfully.'
+        if skipped_count > 0:
+            message += f' {skipped_count} unit(s) skipped (already allocated): {", ".join(skipped_units)}'
+        
+        return JsonResponse({
+            'success': True,
+            'message': message,
+            'created_count': created_count,
+            'skipped_count': skipped_count
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def unit_allocation_update(request, allocation_id):
+    """Update unit allocation"""
+    try:
+        allocation = get_object_or_404(UnitAllocation, id=allocation_id)
+        data = json.loads(request.body)
+        
+        programme_ids = data.get('programme_ids', [])
+        is_active = data.get('is_active', allocation.is_active)
+        
+        with transaction.atomic():
+            allocation.is_active = is_active
+            allocation.save()
+            
+            if programme_ids:
+                programmes = Programme.objects.filter(id__in=programme_ids)
+                allocation.programmes.set(programmes)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Allocation updated successfully!'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def unit_allocation_delete(request, allocation_id):
+    """Delete unit allocation"""
+    try:
+        allocation = get_object_or_404(UnitAllocation, id=allocation_id)
+        unit_code = allocation.unit.code
+        
+        allocation.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Allocation for {unit_code} deleted successfully!'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def unit_allocation_toggle_status(request, allocation_id):
+    """Toggle allocation active status"""
+    try:
+        allocation = get_object_or_404(UnitAllocation, id=allocation_id)
+        allocation.is_active = not allocation.is_active
+        allocation.save()
+        
+        status = 'activated' if allocation.is_active else 'deactivated'
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Allocation {status} successfully!',
+            'is_active': allocation.is_active
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+# AJAX API Endpoints for autocomplete and data fetching
+
+@login_required
+def api_search_units(request):
+    """Search units for autocomplete"""
+    query = request.GET.get('q', '')
+    department_id = request.GET.get('department', '')
+    semester_id = request.GET.get('semester', '')
+    
+    units = Unit.objects.filter(
+        Q(code__icontains=query) | Q(name__icontains=query)
+    )
+    
+    if department_id:
+        units = units.filter(department_id=department_id)
+    
+    # Exclude already allocated units if semester is provided
+    if semester_id:
+        allocated_unit_ids = UnitAllocation.objects.filter(
+            semester_id=semester_id,
+            is_active=True
+        ).values_list('unit_id', flat=True)
+        # Don't exclude, just mark as allocated
+    
+    units = units[:20]  # Limit results
+    
+    results = []
+    for unit in units:
+        is_allocated = False
+        if semester_id:
+            is_allocated = UnitAllocation.objects.filter(
+                unit=unit,
+                semester_id=semester_id,
+                is_active=True
+            ).exists()
+        
+        results.append({
+            'id': unit.id,
+            'code': unit.code,
+            'name': unit.name,
+            'credit_hours': unit.credit_hours,
+            'department': unit.department.name,
+            'is_allocated': is_allocated
+        })
+    
+    return JsonResponse({'results': results})
+
+
+@login_required
+def api_search_lecturers(request):
+    """Search lecturers for autocomplete"""
+    query = request.GET.get('q', '')
+    department_id = request.GET.get('department', '')
+    
+    lecturers = Lecturer.objects.select_related('user', 'department').filter(
+        Q(user__first_name__icontains=query) |
+        Q(user__last_name__icontains=query) |
+        Q(staff_number__icontains=query),
+        is_active=True
+    )
+    
+    if department_id:
+        lecturers = lecturers.filter(department_id=department_id)
+    
+    lecturers = lecturers[:20]
+    
+    results = [{
+        'id': lecturer.user_id,
+        'staff_number': lecturer.staff_number,
+        'name': lecturer.user.get_full_name(),
+        'department': lecturer.department.name,
+        'specialization': lecturer.specialization or 'N/A'
+    } for lecturer in lecturers]
+    
+    return JsonResponse({'results': results})
+
+
+@login_required
+def api_get_programmes(request):
+    """Get programmes for a department"""
+    department_id = request.GET.get('department', '')
+    
+    programmes = Programme.objects.filter(is_active=True)
+    
+    if department_id:
+        programmes = programmes.filter(department_id=department_id)
+    
+    programmes = programmes.order_by('name')
+    
+    results = [{
+        'id': prog.id,
+        'code': prog.code,
+        'name': prog.name,
+        'level': prog.get_level_display()
+    } for prog in programmes]
+    
+    return JsonResponse({'results': results})
+
+
+@login_required
+def api_check_allocation(request):
+    """Check if a unit is already allocated"""
+    unit_id = request.GET.get('unit_id')
+    semester_id = request.GET.get('semester_id')
+    
+    if not unit_id or not semester_id:
+        return JsonResponse({'allocated': False})
+    
+    allocation = UnitAllocation.objects.filter(
+        unit_id=unit_id,
+        semester_id=semester_id,
+        is_active=True
+    ).select_related('lecturer', 'lecturer__user').first()
+    
+    if allocation:
+        return JsonResponse({
+            'allocated': True,
+            'lecturer_name': allocation.lecturer.user.get_full_name(),
+            'lecturer_staff_number': allocation.lecturer.staff_number,
+            'allocation_id': allocation.id
+        })
+    
+    return JsonResponse({'allocated': False})
+
+
+@login_required
+def api_lecturer_allocations(request, lecturer_id):
+    """Get all allocations for a lecturer"""
+    semester_id = request.GET.get('semester')
+    
+    allocations = UnitAllocation.objects.filter(
+        lecturer_id=lecturer_id
+    ).select_related('unit', 'semester').prefetch_related('programmes')
+    
+    if semester_id:
+        allocations = allocations.filter(semester_id=semester_id)
+    
+    allocations = allocations.order_by('-allocated_date')
+    
+    results = [{
+        'id': alloc.id,
+        'unit_code': alloc.unit.code,
+        'unit_name': alloc.unit.name,
+        'semester': str(alloc.semester),
+        'programmes': [{'code': p.code, 'name': p.name} for p in alloc.programmes.all()],
+        'is_active': alloc.is_active,
+        'allocated_date': alloc.allocated_date.strftime('%d %b %Y')
+    } for alloc in allocations]
+    
+    return JsonResponse({'results': results})
