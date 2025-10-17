@@ -7809,3 +7809,382 @@ def get_programme_schemes(request, programme_id):
     return JsonResponse({
         'schemes': list(schemes)
     })
+
+# views.py
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.db.models import Sum, Q
+from django.utils import timezone
+from .models import (
+    FeeStructure, FeePayment, FeeStatement, Student, 
+    Programme, AcademicYear, Semester
+)
+from decimal import Decimal
+
+
+@login_required
+def fee_structure_list(request):
+    """Display fee structures organized by academic year and programme"""
+    academic_years = AcademicYear.objects.all().order_by('-start_date')
+    programmes = Programme.objects.filter(is_active=True).order_by('name')
+    
+    # Get selected filters
+    selected_year_id = request.GET.get('academic_year')
+    selected_programme_id = request.GET.get('programme')
+    
+    # Default to current academic year if available
+    if not selected_year_id:
+        current_year = academic_years.filter(is_current=True).first()
+        if current_year:
+            selected_year_id = current_year.id
+    
+    fee_structures = FeeStructure.objects.all()
+    
+    if selected_year_id:
+        fee_structures = fee_structures.filter(academic_year_id=selected_year_id)
+    
+    if selected_programme_id:
+        fee_structures = fee_structures.filter(programme_id=selected_programme_id)
+    
+    # Organize fee structures by programme and year level
+    programme_fees = {}
+    for fee in fee_structures.select_related('programme', 'academic_year'):
+        prog_key = fee.programme.id
+        if prog_key not in programme_fees:
+            programme_fees[prog_key] = {
+                'programme': fee.programme,
+                'academic_year': fee.academic_year,
+                'year_levels': {}
+            }
+        programme_fees[prog_key]['year_levels'][fee.year_level] = fee
+    
+    context = {
+        'academic_years': academic_years,
+        'programmes': programmes,
+        'programme_fees': programme_fees,
+        'selected_year_id': int(selected_year_id) if selected_year_id else None,
+        'selected_programme_id': int(selected_programme_id) if selected_programme_id else None,
+    }
+    
+    return render(request, 'fees/fee_structure_list.html', context)
+
+
+@login_required
+def fee_structure_create(request):
+    """Create new fee structure"""
+    if request.method == 'POST':
+        programme_id = request.POST.get('programme')
+        academic_year_id = request.POST.get('academic_year')
+        year_level = request.POST.get('year_level')
+        tuition_fee = Decimal(request.POST.get('tuition_fee', 0))
+        examination_fee = Decimal(request.POST.get('examination_fee', 0))
+        registration_fee = Decimal(request.POST.get('registration_fee', 0))
+        other_fees = Decimal(request.POST.get('other_fees', 0))
+        
+        total_fee = tuition_fee + examination_fee + registration_fee + other_fees
+        
+        try:
+            FeeStructure.objects.create(
+                programme_id=programme_id,
+                academic_year_id=academic_year_id,
+                year_level=year_level,
+                tuition_fee=tuition_fee,
+                examination_fee=examination_fee,
+                registration_fee=registration_fee,
+                other_fees=other_fees,
+                total_fee=total_fee
+            )
+            messages.success(request, 'Fee structure created successfully!')
+            return redirect('fee_structure_list')
+        except Exception as e:
+            messages.error(request, f'Error creating fee structure: {str(e)}')
+    
+    programmes = Programme.objects.filter(is_active=True)
+    academic_years = AcademicYear.objects.all()
+    
+    context = {
+        'programmes': programmes,
+        'academic_years': academic_years,
+    }
+    
+    return render(request, 'fees/fee_structure_form.html', context)
+
+
+@login_required
+def fee_structure_update(request, pk):
+    """Update existing fee structure"""
+    fee_structure = get_object_or_404(FeeStructure, pk=pk)
+    
+    if request.method == 'POST':
+        fee_structure.tuition_fee = Decimal(request.POST.get('tuition_fee', 0))
+        fee_structure.examination_fee = Decimal(request.POST.get('examination_fee', 0))
+        fee_structure.registration_fee = Decimal(request.POST.get('registration_fee', 0))
+        fee_structure.other_fees = Decimal(request.POST.get('other_fees', 0))
+        fee_structure.total_fee = (
+            fee_structure.tuition_fee + 
+            fee_structure.examination_fee + 
+            fee_structure.registration_fee + 
+            fee_structure.other_fees
+        )
+        
+        try:
+            fee_structure.save()
+            messages.success(request, 'Fee structure updated successfully!')
+            return redirect('fee_structure_list')
+        except Exception as e:
+            messages.error(request, f'Error updating fee structure: {str(e)}')
+    
+    context = {
+        'fee_structure': fee_structure,
+    }
+    
+    return render(request, 'fees/fee_structure_form.html', context)
+
+
+@login_required
+def fee_structure_delete(request, pk):
+    """Delete fee structure"""
+    fee_structure = get_object_or_404(FeeStructure, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            fee_structure.delete()
+            messages.success(request, 'Fee structure deleted successfully!')
+        except Exception as e:
+            messages.error(request, f'Error deleting fee structure: {str(e)}')
+    
+    return redirect('fee_structure_list')
+
+
+@login_required
+def fee_payment_list(request):
+    """Display all fee payments with filters"""
+    payments = FeePayment.objects.all().select_related(
+        'student', 'semester', 'fee_structure'
+    ).order_by('-payment_date')
+    
+    # Filters
+    search = request.GET.get('search', '')
+    status_filter = request.GET.get('status', '')
+    semester_filter = request.GET.get('semester', '')
+    
+    if search:
+        payments = payments.filter(
+            Q(student__registration_number__icontains=search) |
+            Q(student__first_name__icontains=search) |
+            Q(student__last_name__icontains=search) |
+            Q(receipt_number__icontains=search)
+        )
+    
+    if status_filter:
+        payments = payments.filter(status=status_filter)
+    
+    if semester_filter:
+        payments = payments.filter(semester_id=semester_filter)
+    
+    # Calculate totals
+    total_collected = payments.aggregate(total=Sum('amount_paid'))['total'] or 0
+    
+    semesters = Semester.objects.all().order_by('-start_date')
+    
+    context = {
+        'payments': payments,
+        'semesters': semesters,
+        'search': search,
+        'status_filter': status_filter,
+        'semester_filter': semester_filter,
+        'total_collected': total_collected,
+        'payment_statuses': FeePayment.PAYMENT_STATUS,
+    }
+    
+    return render(request, 'fees/fee_payment_list.html', context)
+
+
+@login_required
+def fee_payment_create(request):
+    """Record a new fee payment"""
+    if request.method == 'POST':
+        student_id = request.POST.get('student')
+        semester_id = request.POST.get('semester')
+        amount_paid = Decimal(request.POST.get('amount_paid', 0))
+        payment_date = request.POST.get('payment_date')
+        payment_method = request.POST.get('payment_method')
+        receipt_number = request.POST.get('receipt_number')
+        
+        try:
+            student = Student.objects.get(user_id=student_id)
+            semester = Semester.objects.get(id=semester_id)
+            
+            # Get fee structure
+            fee_structure = FeeStructure.objects.get(
+                programme=student.programme,
+                academic_year=semester.academic_year,
+                year_level=student.current_year
+            )
+            
+            # Get or create fee statement
+            statement, created = FeeStatement.objects.get_or_create(
+                student=student,
+                semester=semester,
+                defaults={
+                    'total_billed': fee_structure.total_fee,
+                    'total_paid': 0,
+                    'balance': fee_structure.total_fee
+                }
+            )
+            
+            # Calculate new totals
+            new_total_paid = statement.total_paid + amount_paid
+            new_balance = statement.total_billed - new_total_paid
+            
+            # Determine payment status
+            if new_balance <= 0:
+                status = 'COMPLETE'
+            elif new_balance < statement.total_billed:
+                status = 'PARTIAL'
+            else:
+                status = 'PENDING'
+            
+            # Create payment record
+            FeePayment.objects.create(
+                student=student,
+                semester=semester,
+                fee_structure=fee_structure,
+                amount_paid=amount_paid,
+                payment_date=payment_date,
+                receipt_number=receipt_number,
+                payment_method=payment_method,
+                status=status,
+                balance=new_balance
+            )
+            
+            # Update fee statement
+            statement.total_paid = new_total_paid
+            statement.balance = new_balance
+            statement.can_register = new_balance <= (statement.total_billed * Decimal('0.5'))
+            statement.save()
+            
+            messages.success(request, 'Fee payment recorded successfully!')
+            return redirect('fee_payment_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error recording payment: {str(e)}')
+    
+    students = Student.objects.filter(is_active=True).select_related('user', 'programme')
+    semesters = Semester.objects.all().order_by('-start_date')
+    
+    context = {
+        'students': students,
+        'semesters': semesters,
+    }
+    
+    return render(request, 'fees/fee_payment_form.html', context)
+
+
+@login_required
+def fee_payment_detail(request, pk):
+    """View detailed information about a payment"""
+    payment = get_object_or_404(
+        FeePayment.objects.select_related(
+            'student', 'student__user', 'semester', 'fee_structure'
+        ),
+        pk=pk
+    )
+    
+    # Get all payments for this student and semester
+    related_payments = FeePayment.objects.filter(
+        student=payment.student,
+        semester=payment.semester
+    ).order_by('-payment_date')
+    
+    context = {
+        'payment': payment,
+        'related_payments': related_payments,
+    }
+    
+    return render(request, 'fees/fee_payment_detail.html', context)
+
+
+@login_required
+def fee_statement_list(request):
+    """Display fee statements for all students"""
+    statements = FeeStatement.objects.all().select_related(
+        'student', 'student__user', 'semester'
+    ).order_by('-semester__start_date', 'student__registration_number')
+    
+    # Filters
+    search = request.GET.get('search', '')
+    semester_filter = request.GET.get('semester', '')
+    balance_filter = request.GET.get('balance', '')
+    
+    if search:
+        statements = statements.filter(
+            Q(student__registration_number__icontains=search) |
+            Q(student__first_name__icontains=search) |
+            Q(student__last_name__icontains=search)
+        )
+    
+    if semester_filter:
+        statements = statements.filter(semester_id=semester_filter)
+    
+    if balance_filter == 'with_balance':
+        statements = statements.filter(balance__gt=0)
+    elif balance_filter == 'cleared':
+        statements = statements.filter(balance__lte=0)
+    
+    # Calculate totals
+    totals = statements.aggregate(
+        total_billed=Sum('total_billed'),
+        total_paid=Sum('total_paid'),
+        total_balance=Sum('balance')
+    )
+    
+    semesters = Semester.objects.all().order_by('-start_date')
+    
+    context = {
+        'statements': statements,
+        'semesters': semesters,
+        'search': search,
+        'semester_filter': semester_filter,
+        'balance_filter': balance_filter,
+        'totals': totals,
+    }
+    
+    return render(request, 'fees/fee_statement_list.html', context)
+
+
+@login_required
+def fee_statement_detail(request, student_id, semester_id):
+    """View detailed fee statement for a specific student and semester"""
+    student = get_object_or_404(Student, user_id=student_id)
+    semester = get_object_or_404(Semester, id=semester_id)
+    
+    statement = get_object_or_404(
+        FeeStatement,
+        student=student,
+        semester=semester
+    )
+    
+    # Get all payments for this statement
+    payments = FeePayment.objects.filter(
+        student=student,
+        semester=semester
+    ).order_by('payment_date')
+    
+    # Get fee structure
+    fee_structure = FeeStructure.objects.filter(
+        programme=student.programme,
+        academic_year=semester.academic_year,
+        year_level=student.current_year
+    ).first()
+    
+    context = {
+        'statement': statement,
+        'student': student,
+        'semester': semester,
+        'payments': payments,
+        'fee_structure': fee_structure,
+    }
+    
+    return render(request, 'fees/fee_statement_detail.html', context)

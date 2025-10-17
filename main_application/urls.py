@@ -169,5 +169,15 @@ urlpatterns = [
     path('grading-schemes/<int:scheme_id>/delete/', views.grading_scheme_delete, name='grading_scheme_delete'),
     path('grading-schemes/bulk-create/', views.grading_scheme_bulk_create, name='grading_scheme_bulk_create'),
     path('grading-schemes/programme/<int:programme_id>/schemes/', views.get_programme_schemes, name='get_programme_schemes'),
+
+    path('fee-structures/', views.fee_structure_list, name='fee_structure_list'),
+    path('fee-structures/create/', views.fee_structure_create, name='fee_structure_create'),
+    path('fee-structures/<int:pk>/update/', views.fee_structure_update, name='fee_structure_update'),
+    path('fee-structures/<int:pk>/delete/', views.fee_structure_delete, name='fee_structure_delete'),
+    path('fee-payments/', views.fee_payment_list, name='fee_payment_list'),
+    path('fee-payments/create/', views.fee_payment_create, name='fee_payment_create'),
+    path('fee-payments/<int:pk>/', views.fee_payment_detail, name='fee_payment_detail'),
+    path('fee-statements/', views.fee_statement_list, name='fee_statement_list'),
+    path('fee-statements/<int:student_id>/<int:semester_id>/', views.fee_statement_detail, name='fee_statement_detail'),
 ]
 

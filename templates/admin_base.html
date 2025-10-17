@@ -639,7 +639,7 @@
                 <i class="fas fa-chevron-right arrow"></i>
             </div>
             <div class="submenu" id="submenu-fees">
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'fee_structure' %}active{% endif %}">Fee Structure</a>
+                <a href="{% url 'fee_structure_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'fee_structure_list' %}active{% endif %}">Fee Structure</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'fee_payments' %}active{% endif %}">Fee Payments</a>
                 <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'fee_statements' %}active{% endif %}">Fee Statements</a>
             </div>
