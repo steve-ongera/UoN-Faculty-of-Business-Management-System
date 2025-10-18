@@ -223,6 +223,7 @@ urlpatterns = [
     path('api/departments/cods/search/', views.api_search_cods, name='api_search_cods'),
     path('api/departments/<str:code>/quick-update/', views.api_department_quick_update, name='api_department_quick_update'),
     path('api/departments/<str:code>/stats/', views.api_department_stats, name='api_department_stats'),
+    path('admin-calendar/', views.admin_academic_calendar, name='admin_academic_calendar'),
     
 ]
 

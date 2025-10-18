@@ -538,7 +538,7 @@
                 <i class="fas fa-home"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="#" class="menu-item {% if request.resolver_match.url_name == 'admin_academic_calendar' %}active{% endif %}">
+            <a href="{% url 'admin_academic_calendar'%}" class="menu-item {% if request.resolver_match.url_name == 'admin_academic_calendar' %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i>
                 <span>Academic Calendar</span>
             </a>
