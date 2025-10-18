@@ -38,6 +38,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    'main_application.middleware.ThreadLocalMiddleware',
+    'main_application.middleware.SecurityMiddleware',
+    'main_application.middleware.BruteForceProtectionMiddleware',
 ]
 
 ROOT_URLCONF = 'Business_Management_System.urls'
