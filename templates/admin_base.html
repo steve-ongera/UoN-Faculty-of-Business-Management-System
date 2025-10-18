@@ -305,6 +305,7 @@
             padding: 6px 12px 6px 6px;
             border-radius: 8px;
             transition: all 0.3s ease;
+            position: relative;
         }
 
         .user-profile:hover {
@@ -331,6 +332,102 @@
         .user-role {
             font-size: 12px;
             color: var(--text-secondary);
+        }
+
+        /* User Profile Dropdown */
+        .user-dropdown {
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            min-width: 220px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 1001;
+            border: 1px solid var(--border-color);
+        }
+
+        .user-dropdown.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .user-dropdown::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 20px;
+            width: 12px;
+            height: 12px;
+            background: var(--card-bg);
+            border-left: 1px solid var(--border-color);
+            border-top: 1px solid var(--border-color);
+            transform: rotate(45deg);
+        }
+
+        .dropdown-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .dropdown-user-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .dropdown-user-email {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .dropdown-menu {
+            padding: 8px 0;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+
+        .dropdown-item:hover {
+            background-color: var(--main-bg);
+        }
+
+        .dropdown-item i {
+            width: 18px;
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        .dropdown-divider {
+            height: 1px;
+            background-color: var(--border-color);
+            margin: 8px 0;
+        }
+
+        .dropdown-item.logout {
+            color: var(--danger-color);
+        }
+
+        .dropdown-item.logout i {
+            color: var(--danger-color);
+        }
+
+        .dropdown-item.logout:hover {
+            background-color: #FEF2F2;
         }
 
         /* Content Area */
@@ -365,72 +462,71 @@
         }
 
         /* ===== Django Messages Styling ===== */
-.alert {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    margin: 10px 0;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 500;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    animation: slideIn 0.4s ease forwards;
-    transition: all 0.3s ease;
-}
+        .alert {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            animation: slideIn 0.4s ease forwards;
+            transition: all 0.3s ease;
+        }
 
-/* Success Message */
-.alert-success {
-    background-color: #ecfdf5;
-    border-left: 4px solid #10b981;
-    color: #065f46;
-}
+        /* Success Message */
+        .alert-success {
+            background-color: #ecfdf5;
+            border-left: 4px solid #10b981;
+            color: #065f46;
+        }
 
-/* Error Message */
-.alert-error {
-    background-color: #fef2f2;
-    border-left: 4px solid #ef4444;
-    color: #7f1d1d;
-}
+        /* Error Message */
+        .alert-error {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+            color: #7f1d1d;
+        }
 
-/* Warning Message */
-.alert-warning {
-    background-color: #fffbeb;
-    border-left: 4px solid #f59e0b;
-    color: #78350f;
-}
+        /* Warning Message */
+        .alert-warning {
+            background-color: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            color: #78350f;
+        }
 
-/* Info Message */
-.alert-info {
-    background-color: #eff6ff;
-    border-left: 4px solid #3b82f6;
-    color: #1e3a8a;
-}
+        /* Info Message */
+        .alert-info {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            color: #1e3a8a;
+        }
 
-/* Icon inside message */
-.alert i {
-    font-size: 18px;
-    opacity: 0.85;
-}
+        /* Icon inside message */
+        .alert i {
+            font-size: 18px;
+            opacity: 0.85;
+        }
 
-/* Hover effect */
-.alert:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
+        /* Hover effect */
+        .alert:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
 
-/* Animation for appearing */
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
+        /* Animation for appearing */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
         /* Mobile Overlay */
         .sidebar-overlay {
@@ -703,13 +799,36 @@
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge"></span>
                 </div>
-                <div class="user-profile">
-                    <img src="https://ui-avatars.com/api/?name=Admin+User&background=4F46E5&color=fff" alt="User" class="user-avatar">
+                <div class="user-profile" id="userProfile">
+                    <img src="https://ui-avatars.com/api/?name={{ user.get_full_name|default:'Admin User'|urlencode }}&background=4F46E5&color=fff" alt="User" class="user-avatar">
                     <div class="user-info">
                         <span class="user-name">{{ user.get_full_name|default:"Admin User" }}</span>
                         <span class="user-role">{{ user.get_user_type_display|default:"Administrator" }}</span>
                     </div>
                     <i class="fas fa-chevron-down"></i>
+                    
+                    <!-- User Dropdown -->
+                    <div class="user-dropdown" id="userDropdown">
+                        <div class="dropdown-header">
+                            <div class="dropdown-user-name">{{ user.get_full_name|default:"Admin User" }}</div>
+                            <div class="dropdown-user-email">{{ user.email|default:"admin@example.com" }}</div>
+                        </div>
+                        <div class="dropdown-menu">
+                            <a href="#" class="dropdown-item">
+                                <i class="fas fa-cog"></i>
+                                <span>Settings</span>
+                            </a>
+                            <a href="#" class="dropdown-item">
+                                <i class="fas fa-question-circle"></i>
+                                <span>Help & Support</span>
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="{% url 'logout' %}" class="dropdown-item logout">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>Logout</span>
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -794,6 +913,27 @@
             });
         });
 
+        // User Profile Dropdown Toggle
+        const userProfile = document.getElementById('userProfile');
+        const userDropdown = document.getElementById('userDropdown');
+
+        userProfile.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('active');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!userProfile.contains(e.target)) {
+                userDropdown.classList.remove('active');
+            }
+        });
+
+        // Prevent dropdown from closing when clicking inside it
+        userDropdown.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
         // Handle window resize
         window.addEventListener('resize', () => {
             if (window.innerWidth > 768) {
@@ -811,6 +951,11 @@
                 e.preventDefault();
                 searchInput.focus();
             }
+            
+            // Close dropdown with Escape key
+            if (e.key === 'Escape') {
+                userDropdown.classList.remove('active');
+            }
         });
 
         // Dark mode toggle (placeholder)
@@ -825,13 +970,6 @@
         notificationIcon.addEventListener('click', () => {
             // Add notification dropdown functionality here
             console.log('Notifications clicked');
-        });
-
-        // User profile click
-        const userProfile = document.querySelector('.user-profile');
-        userProfile.addEventListener('click', () => {
-            // Add user profile dropdown functionality here
-            console.log('User profile clicked');
         });
     </script>
 
