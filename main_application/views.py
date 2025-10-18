@@ -2109,11 +2109,25 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Avg, Count, Q, F
 from decimal import Decimal
-from collections import defaultdict
+from collections import OrderedDict
 from .models import (
     Student, UnitEnrollment, ProgrammeUnit, 
-    Semester, StudentMarks, FinalGrade
+    Semester, StudentMarks, FinalGrade, AcademicYear
 )
+
+def get_classification(gpa):
+    """Get degree classification based on GPA"""
+    gpa = float(gpa)
+    if gpa >= 3.70:
+        return "First Class Honours"
+    elif gpa >= 3.30:
+        return "Second Class Honours (Upper Division)"
+    elif gpa >= 2.70:
+        return "Second Class Honours (Lower Division)"
+    elif gpa >= 2.00:
+        return "Pass"
+    else:
+        return "Fail"
 
 @login_required
 def student_grades_view(request):
@@ -2141,19 +2155,9 @@ def student_grades_view(request):
         'semester__semester_number'
     )
     
-    # Organize grades by year and semester
-    grades_by_year = defaultdict(lambda: {
-        'year_label': '',
-        'semesters': defaultdict(lambda: {
-            'semester_label': '',
-            'academic_year': '',
-            'units': [],
-            'total_units': 0,
-            'total_credits': 0,
-            'semester_gpa': Decimal('0.00'),
-            'graded_units': 0
-        })
-    })
+    # Organize grades by ACTUAL academic year and semester
+    # Structure: {year_level: {academic_year_id: {semester_num: {...}}}}
+    grades_structure = OrderedDict()
     
     total_credits_earned = 0
     total_grade_points = Decimal('0.00')
@@ -2165,26 +2169,51 @@ def student_grades_view(request):
         semester_num = semester.semester_number
         
         # Get the correct year level from ProgrammeUnit
-        # Filter by student's programme to avoid multiple results
         try:
             program_unit = ProgrammeUnit.objects.filter(
                 programme=student.programme,
                 unit=enrollment.unit,
                 semester=semester_num
-            ).first()  # Use .first() instead of .get()
+            ).first()
             
             if program_unit:
                 year_level = program_unit.year_level
             else:
-                # Try without semester constraint
+                # Fallback: try without semester constraint
                 program_unit = ProgrammeUnit.objects.filter(
                     programme=student.programme,
                     unit=enrollment.unit
                 ).first()
                 year_level = program_unit.year_level if program_unit else 1
-        except Exception as e:
-            # Fallback to Year 1 if any error occurs
+        except Exception:
             year_level = 1
+        
+        # Initialize nested structure
+        if year_level not in grades_structure:
+            grades_structure[year_level] = OrderedDict()
+        
+        if academic_year.id not in grades_structure[year_level]:
+            grades_structure[year_level][academic_year.id] = {
+                'academic_year': academic_year,
+                'year_code': academic_year.year_code,
+                'semesters': OrderedDict()
+            }
+        
+        if semester_num not in grades_structure[year_level][academic_year.id]['semesters']:
+            grades_structure[year_level][academic_year.id]['semesters'][semester_num] = {
+                'semester': semester,
+                'semester_label': f'Semester {semester_num}',
+                'semester_num': semester_num,
+                'units': [],
+                'total_units': 0,
+                'total_credits': 0,
+                'semester_gpa': Decimal('0.00'),
+                'graded_units': 0,
+                'semester_credits': Decimal('0.00'),
+                'semester_points': Decimal('0.00')
+            }
+        
+        semester_data = grades_structure[year_level][academic_year.id]['semesters'][semester_num]
         
         # Get assessment breakdown
         assessment_breakdown = []
@@ -2237,54 +2266,68 @@ def student_grades_view(request):
                 total_credits_earned += enrollment.unit.credit_hours
                 total_grade_points += (final_grade.grade_point * enrollment.unit.credit_hours)
                 total_units_completed += 1
+                
+                # Add to semester totals
+                semester_data['semester_credits'] += enrollment.unit.credit_hours
+                semester_data['semester_points'] += (final_grade.grade_point * enrollment.unit.credit_hours)
+                semester_data['graded_units'] += 1
         
-        # Add to structure based on ACTUAL year and semester
-        year_data = grades_by_year[year_level]
-        year_data['year_label'] = f'Year {year_level}'
-        
-        semester_data = year_data['semesters'][semester_num]
-        semester_data['semester_label'] = f'Semester {semester_num}'
-        semester_data['academic_year'] = academic_year.year_code
+        # Add unit to semester
         semester_data['units'].append(unit_data)
         semester_data['total_units'] += 1
         semester_data['total_credits'] += enrollment.unit.credit_hours
-        
-        if unit_data['has_grade']:
-            semester_data['graded_units'] += 1
     
     # Calculate semester GPAs
-    for year_level, year_data in grades_by_year.items():
-        for semester_num, semester_data in year_data['semesters'].items():
-            semester_credits = Decimal('0.00')
-            semester_points = Decimal('0.00')
-            
-            for unit in semester_data['units']:
-                if unit['has_grade'] and unit['grade_point']:
-                    semester_credits += unit['credit_hours']
-                    semester_points += (unit['grade_point'] * unit['credit_hours'])
-            
-            if semester_credits > 0:
-                semester_data['semester_gpa'] = round(semester_points / semester_credits, 2)
+    for year_level in grades_structure:
+        for academic_year_id in grades_structure[year_level]:
+            for semester_num in grades_structure[year_level][academic_year_id]['semesters']:
+                semester_data = grades_structure[year_level][academic_year_id]['semesters'][semester_num]
+                
+                if semester_data['semester_credits'] > 0:
+                    semester_data['semester_gpa'] = round(
+                        semester_data['semester_points'] / semester_data['semester_credits'], 
+                        2
+                    )
     
-    # Calculate cumulative GPA
+    # Calculate cumulative GPA and classification
     cumulative_gpa = Decimal('0.00')
+    classification = "Not Available"
+    
     if total_credits_earned > 0:
         cumulative_gpa = round(total_grade_points / total_credits_earned, 2)
+        classification = get_classification(cumulative_gpa)
     
-    # Sort the data properly - Year 1 first, then Year 2, etc.
-    grades_by_year = dict(sorted(grades_by_year.items(), key=lambda x: x[0]))
-    
-    # Sort semesters within each year - Semester 1 first, then 2, then 3
-    for year_level in grades_by_year:
-        grades_by_year[year_level]['semesters'] = dict(
-            sorted(grades_by_year[year_level]['semesters'].items(), key=lambda x: x[0])
-        )
+    # Convert to list for template
+    grades_by_year = []
+    for year_level in sorted(grades_structure.keys()):
+        year_academic_years = []
+        
+        for academic_year_id in grades_structure[year_level]:
+            academic_year_data = grades_structure[year_level][academic_year_id]
+            
+            # Convert semesters to list
+            semesters_list = []
+            for semester_num in sorted(academic_year_data['semesters'].keys()):
+                semesters_list.append(academic_year_data['semesters'][semester_num])
+            
+            year_academic_years.append({
+                'academic_year': academic_year_data['academic_year'],
+                'year_code': academic_year_data['year_code'],
+                'semesters': semesters_list
+            })
+        
+        grades_by_year.append({
+            'year_level': year_level,
+            'year_label': f'Year {year_level}',
+            'academic_years': year_academic_years
+        })
     
     context = {
         'student': student,
         'programme': student.programme,
         'grades_by_year': grades_by_year,
         'cumulative_gpa': cumulative_gpa,
+        'classification': classification,
         'total_credits_earned': total_credits_earned,
         'total_units_completed': total_units_completed,
         'current_year': student.current_year,

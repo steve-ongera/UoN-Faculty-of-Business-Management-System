@@ -139,6 +139,19 @@
         color: rgba(255, 255, 255, 0.8);
     }
 
+    /* Classification Badge */
+    .classification-badge {
+        display: inline-block;
+        padding: 8px 16px;
+        background: linear-gradient(135deg, #10B981, #059669);
+        color: white;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 700;
+        margin-top: 8px;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
     /* Year Tabs */
     .year-tabs {
         display: flex;
@@ -193,6 +206,33 @@
             opacity: 1;
             transform: translateY(0);
         }
+    }
+
+    /* Academic Year Section */
+    .academic-year-section {
+        margin-bottom: 32px;
+        border: 2px solid #E0E7FF;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .academic-year-header {
+        background: linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%);
+        padding: 16px 20px;
+        border-bottom: 2px solid #E0E7FF;
+    }
+
+    .academic-year-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #4F46E5;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .academic-year-content {
+        padding: 20px;
     }
 
     /* Semester Tabs */
@@ -474,6 +514,9 @@
                 </div>
                 <div class="stat-value">{{ cumulative_gpa }}</div>
                 <div class="stat-sub">out of 4.00</div>
+                <div class="classification-badge">
+                    <i class="bi bi-award"></i> {{ classification }}
+                </div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">
@@ -498,156 +541,172 @@
     </div>
 
     <!-- Year Tabs -->
+    {% if grades_by_year %}
     <div class="year-tabs">
-        {% for year_level, year_data in grades_by_year.items %}
+        {% for year_data in grades_by_year %}
         <button 
             type="button" 
             class="year-tab {% if forloop.first %}active{% endif %}"
-            onclick="switchYear(this, 'year-{{ year_level }}')">
+            onclick="switchYear(this, 'year-{{ year_data.year_level }}')">
             <i class="bi bi-bookmark"></i> {{ year_data.year_label }}
         </button>
         {% endfor %}
     </div>
 
     <!-- Year Contents -->
-    {% for year_level, year_data in grades_by_year.items %}
-    <div id="year-{{ year_level }}" class="year-content {% if forloop.first %}active{% endif %}">
+    {% for year_data in grades_by_year %}
+    <div id="year-{{ year_data.year_level }}" class="year-content {% if forloop.first %}active{% endif %}">
         
-        <!-- Semester Tabs -->
-        <div class="semester-tabs">
-            {% for semester_num, semester_data in year_data.semesters.items %}
-            <button 
-                type="button" 
-                class="semester-tab {% if forloop.first %}active{% endif %}"
-                onclick="switchSemester(this, 'sem-{{ year_level }}-{{ semester_num }}')">
-                <i class="bi bi-hourglass-split"></i> {{ semester_data.semester_label }}
-            </button>
-            {% endfor %}
-        </div>
-
-        <!-- Semester Contents -->
-        {% for semester_num, semester_data in year_data.semesters.items %}
-        <div id="sem-{{ year_level }}-{{ semester_num }}" class="semester-content {% if forloop.first %}active{% endif %}">
+        <!-- Academic Years within this Year Level -->
+        {% for academic_year_data in year_data.academic_years %}
+        <div class="academic-year-section">
+            <div class="academic-year-header">
+                <div class="academic-year-title">
+                    <i class="bi bi-calendar3"></i>
+                    Academic Year: {{ academic_year_data.year_code }}
+                </div>
+            </div>
             
-            <!-- Semester Header -->
-            <div class="semester-header">
-                <div class="semester-info">
-                    <span class="semester-title">
-                        <i class="bi bi-hourglass-split"></i> {{ semester_data.semester_label }} - {{ semester_data.academic_year }}
-                    </span>
-                    <div class="semester-stats">
-                        <span class="semester-stat">
-                            <i class="bi bi-star"></i> GPA: {{ semester_data.semester_gpa }}
-                        </span>
-                        <span class="semester-stat">
-                            <i class="bi bi-book"></i> {{ semester_data.total_units }} Units
-                        </span>
-                        <span class="semester-stat">
-                            <i class="bi bi-mortarboard"></i> {{ semester_data.total_credits }} Credits
-                        </span>
-                    </div>
+            <div class="academic-year-content">
+                <!-- Semester Tabs -->
+                <div class="semester-tabs">
+                    {% for semester_data in academic_year_data.semesters %}
+                    <button 
+                        type="button" 
+                        class="semester-tab {% if forloop.first %}active{% endif %}"
+                        onclick="switchSemester(this, 'sem-{{ year_data.year_level }}-{{ academic_year_data.academic_year.id }}-{{ semester_data.semester_num }}')">
+                        <i class="bi bi-hourglass-split"></i> {{ semester_data.semester_label }}
+                    </button>
+                    {% endfor %}
                 </div>
-            </div>
 
-            <!-- Units Table -->
-            {% if semester_data.units %}
-            <div class="units-table-container">
-                <table class="units-table">
-                    <thead>
-                        <tr>
-                            <th>Unit Code</th>
-                            <th>Unit Name</th>
-                            <th>Credits</th>
-                            <th>Total Marks</th>
-                            <th>Grade</th>
-                            <th>Grade Point</th>
-                            <th>Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for unit in semester_data.units %}
-                        <tr>
-                            <td>
-                                <span class="unit-code">{{ unit.unit_code }}</span>
-                            </td>
-                            <td>
-                                <span class="unit-name">{{ unit.unit_name }}</span>
-                            </td>
-                            <td>{{ unit.credit_hours }}</td>
-                            <td>
-                                <strong>{{ unit.total_marks|floatformat:2 }}%</strong>
-                            </td>
-                            <td>
-                                {% if unit.has_grade %}
-                                <span class="grade-badge grade-{{ unit.grade }}">
-                                    {{ unit.grade }}
+                <!-- Semester Contents -->
+                {% for semester_data in academic_year_data.semesters %}
+                <div id="sem-{{ year_data.year_level }}-{{ academic_year_data.academic_year.id }}-{{ semester_data.semester_num }}" 
+                     class="semester-content {% if forloop.first %}active{% endif %}">
+                    
+                    <!-- Semester Header -->
+                    <div class="semester-header">
+                        <div class="semester-info">
+                            <span class="semester-title">
+                                <i class="bi bi-hourglass-split"></i> {{ semester_data.semester_label }}
+                            </span>
+                            <div class="semester-stats">
+                                <span class="semester-stat">
+                                    <i class="bi bi-star"></i> GPA: {{ semester_data.semester_gpa }}
                                 </span>
-                                {% else %}
-                                <span style="color: #94A3B8; font-style: italic;">Pending</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if unit.has_grade %}
-                                <span class="gp-badge">{{ unit.grade_point }}</span>
-                                {% else %}
-                                -
-                                {% endif %}
-                            </td>
-                            <td>
+                                <span class="semester-stat">
+                                    <i class="bi bi-book"></i> {{ semester_data.total_units }} Units
+                                </span>
+                                <span class="semester-stat">
+                                    <i class="bi bi-mortarboard"></i> {{ semester_data.total_credits }} Credits
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Units Table -->
+                    {% if semester_data.units %}
+                    <div class="units-table-container">
+                        <table class="units-table">
+                            <thead>
+                                <tr>
+                                    <th>Unit Code</th>
+                                    <th>Unit Name</th>
+                                    <th>Credits</th>
+                                    <th>Total Marks</th>
+                                    <th>Grade</th>
+                                    <th>Grade Point</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for unit in semester_data.units %}
+                                <tr>
+                                    <td>
+                                        <span class="unit-code">{{ unit.unit_code }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="unit-name">{{ unit.unit_name }}</span>
+                                    </td>
+                                    <td>{{ unit.credit_hours }}</td>
+                                    <td>
+                                        <strong>{{ unit.total_marks|floatformat:2 }}%</strong>
+                                    </td>
+                                    <td>
+                                        {% if unit.has_grade %}
+                                        <span class="grade-badge grade-{{ unit.grade }}">
+                                            {{ unit.grade }}
+                                        </span>
+                                        {% else %}
+                                        <span style="color: #94A3B8; font-style: italic;">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if unit.has_grade %}
+                                        <span class="gp-badge">{{ unit.grade_point }}</span>
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if unit.assessment_breakdown %}
+                                        <button 
+                                            class="expand-btn" 
+                                            onclick="toggleAssessment(this, 'assessment-{{ year_data.year_level }}-{{ academic_year_data.academic_year.id }}-{{ semester_data.semester_num }}-{{ forloop.counter }}')"
+                                            type="button">
+                                            <i class="bi bi-chevron-down"></i> View Breakdown
+                                        </button>
+                                        {% else %}
+                                        <span style="color: #94A3B8;">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
                                 {% if unit.assessment_breakdown %}
-                                <button 
-                                    class="expand-btn" 
-                                    onclick="toggleAssessment(this, 'assessment-{{ year_level }}-{{ semester_num }}-{{ forloop.counter }}')"
-                                    type="button">
-                                    <i class="bi bi-chevron-down"></i> View Breakdown
-                                </button>
-                                {% else %}
-                                <span style="color: #94A3B8;">-</span>
+                                <tr id="assessment-{{ year_data.year_level }}-{{ academic_year_data.academic_year.id }}-{{ semester_data.semester_num }}-{{ forloop.counter }}" style="display: none;">
+                                    <td colspan="7" style="background: #F8FAFC; padding: 16px;">
+                                        <div class="assessment-breakdown">
+                                            <strong style="font-size: 13px; color: #1E293B; display: block; margin-bottom: 8px;">
+                                                <i class="bi bi-file-earmark-text"></i> Assessment Breakdown
+                                            </strong>
+                                            {% for assessment in unit.assessment_breakdown %}
+                                            <div class="assessment-item">
+                                                <span class="assessment-name">
+                                                    {{ assessment.name }} ({{ assessment.type }}) - {{ assessment.weight }}%
+                                                </span>
+                                                <span class="assessment-marks">
+                                                    {{ assessment.marks_obtained|floatformat:1 }}/{{ assessment.max_marks|floatformat:0 }}
+                                                    ({{ assessment.percentage|floatformat:1 }}%) = 
+                                                    <strong>{{ assessment.weighted_marks|floatformat:2 }}%</strong>
+                                                </span>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                </tr>
                                 {% endif %}
-                            </td>
-                        </tr>
-                        {% if unit.assessment_breakdown %}
-                        <tr id="assessment-{{ year_level }}-{{ semester_num }}-{{ forloop.counter }}" style="display: none;">
-                            <td colspan="7" style="background: #F8FAFC; padding: 16px;">
-                                <div class="assessment-breakdown">
-                                    <strong style="font-size: 13px; color: #1E293B; display: block; margin-bottom: 8px;">
-                                        <i class="bi bi-file-earmark-text"></i> Assessment Breakdown
-                                    </strong>
-                                    {% for assessment in unit.assessment_breakdown %}
-                                    <div class="assessment-item">
-                                        <span class="assessment-name">
-                                            {{ assessment.name }} ({{ assessment.type }}) - {{ assessment.weight }}%
-                                        </span>
-                                        <span class="assessment-marks">
-                                            {{ assessment.marks_obtained|floatformat:1 }}/{{ assessment.max_marks|floatformat:0 }}
-                                            ({{ assessment.percentage|floatformat:1 }}%) = 
-                                            <strong>{{ assessment.weighted_marks|floatformat:2 }}%</strong>
-                                        </span>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endif %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="empty-state">
-                <div class="empty-icon">
-                    <i class="bi bi-inbox"></i>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="bi bi-inbox"></i>
+                        </div>
+                        <h3 class="empty-title">No Grades Available</h3>
+                        <p class="empty-text">No grades have been posted for this semester yet.</p>
+                    </div>
+                    {% endif %}
                 </div>
-                <h3 class="empty-title">No Grades Available</h3>
-                <p class="empty-text">No grades have been posted for this semester yet.</p>
+                {% endfor %}
             </div>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
     {% endfor %}
 
-    {% if not grades_by_year %}
+    {% else %}
     <div class="empty-state">
         <div class="empty-icon">
             <i class="bi bi-inbox"></i>
@@ -672,6 +731,7 @@
         element.classList.add('active');
         document.getElementById(yearId).classList.add('active');
         
+        // Activate first semester of first academic year in this year level
         const firstSemesterTab = document.querySelector(`#${yearId} .semester-tab`);
         if (firstSemesterTab) {
             firstSemesterTab.click();
@@ -679,9 +739,9 @@
     }
 
     function switchSemester(element, semesterId) {
-        const parentYear = element.closest('.year-content');
-        const tabs = parentYear.querySelectorAll('.semester-tab');
-        const contents = parentYear.querySelectorAll('.semester-content');
+        const parentAcademicYear = element.closest('.academic-year-content');
+        const tabs = parentAcademicYear.querySelectorAll('.semester-tab');
+        const contents = parentAcademicYear.querySelectorAll('.semester-content');
         
         tabs.forEach(tab => tab.classList.remove('active'));
         contents.forEach(content => content.classList.remove('active'));
@@ -708,7 +768,12 @@
     document.addEventListener('DOMContentLoaded', function() {
         const firstYearTab = document.querySelector('.year-tab.active');
         if (firstYearTab) {
-            firstYearTab.click();
+            // Trigger click to ensure proper initialization
+            const yearId = firstYearTab.getAttribute('onclick').match(/'([^']+)'/)[1];
+            const firstSemesterTab = document.querySelector(`#${yearId} .semester-tab`);
+            if (firstSemesterTab) {
+                firstSemesterTab.click();
+            }
         }
     });
 </script>
