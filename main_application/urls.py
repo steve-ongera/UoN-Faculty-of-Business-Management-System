@@ -224,6 +224,17 @@ urlpatterns = [
     path('api/departments/<str:code>/quick-update/', views.api_department_quick_update, name='api_department_quick_update'),
     path('api/departments/<str:code>/stats/', views.api_department_stats, name='api_department_stats'),
     path('admin-calendar/', views.admin_academic_calendar, name='admin_academic_calendar'),
+
+    # Main venue management page
+    path('admin-venues/', views.venue_list, name='venue_list'),
+    path('api/venues/list/', views.venue_list_ajax, name='venue_list_ajax'),
+    path('api/venues/<int:venue_id>/', views.venue_detail_ajax, name='venue_detail_ajax'),
+    path('api/venues/create/', views.venue_create_ajax, name='venue_create_ajax'),
+    path('api/venues/<int:venue_id>/update/', views.venue_update_ajax, name='venue_update_ajax'),
+    path('api/venues/<int:venue_id>/delete/', views.venue_delete_ajax, name='venue_delete_ajax'),
+    path('api/venues/<int:venue_id>/toggle-availability/', views.venue_toggle_availability_ajax, name='venue_toggle_availability_ajax'),
+    path('api/venues/buildings/', views.venue_buildings_ajax, name='venue_buildings_ajax'),
+    path('api/venues/export/', views.venue_export_ajax, name='venue_export_ajax'),
     
 ]
 

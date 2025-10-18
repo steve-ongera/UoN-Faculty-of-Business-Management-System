@@ -10441,3 +10441,527 @@ def admin_academic_calendar(request):
     }
     
     return render(request, 'admin/admin_academic_calendar.html', context)
+
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.db.models import Q, Count
+from django.core.paginator import Paginator
+from django.utils import timezone
+from django.db import transaction
+import json
+import traceback
+
+from .models import Venue, TimetableSlot, User
+
+
+@login_required
+@ensure_csrf_cookie
+def venue_list(request):
+    """
+    Main venue management page
+    """
+    # Check if user has permission
+    if not request.user.user_type in ['ICT_ADMIN', 'DEAN', 'COD']:
+        return render(request, 'error.html', {
+            'message': 'You do not have permission to access this page.'
+        })
+    
+    # Get statistics
+    stats = {
+        'total_venues': Venue.objects.count(),
+        'available_venues': Venue.objects.filter(is_available=True).count(),
+        'lecture_halls': Venue.objects.filter(venue_type='LECTURE_HALL').count(),
+        'labs': Venue.objects.filter(venue_type='LAB').count(),
+        'venues_with_projectors': Venue.objects.filter(has_projector=True).count(),
+        'venues_with_computers': Venue.objects.filter(has_computers=True).count(),
+    }
+    
+    context = {
+        'stats': stats,
+        'venue_types': Venue.VENUE_TYPES,
+    }
+    
+    return render(request, 'admin/venue_management.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def venue_list_ajax(request):
+    """
+    AJAX endpoint to get paginated venue list with filters
+    """
+    try:
+        # Get filter parameters with defaults
+        search_query = request.GET.get('search', '').strip()
+        venue_type = request.GET.get('venue_type', '').strip()
+        availability = request.GET.get('availability', '').strip()
+        building = request.GET.get('building', '').strip()
+        
+        try:
+            page = int(request.GET.get('page', 1))
+            if page < 1:
+                page = 1
+        except (ValueError, TypeError):
+            page = 1
+            
+        try:
+            per_page = int(request.GET.get('per_page', 10))
+            if per_page < 1 or per_page > 100:
+                per_page = 10
+        except (ValueError, TypeError):
+            per_page = 10
+        
+        # Base queryset
+        venues = Venue.objects.all()
+        
+        # Apply filters
+        if search_query:
+            venues = venues.filter(
+                Q(name__icontains=search_query) |
+                Q(code__icontains=search_query) |
+                Q(building__icontains=search_query)
+            )
+        
+        if venue_type:
+            venues = venues.filter(venue_type=venue_type)
+        
+        if availability:
+            is_available = availability.lower() == 'true'
+            venues = venues.filter(is_available=is_available)
+        
+        if building:
+            venues = venues.filter(building__icontains=building)
+        
+        # Annotate with timetable count
+        venues = venues.annotate(
+            timetable_count=Count('timetable_slots', distinct=True)
+        )
+        
+        # Order by building, then name
+        venues = venues.order_by('building', 'name')
+        
+        # Get total count before pagination
+        total_count = venues.count()
+        
+        # Pagination
+        paginator = Paginator(venues, per_page)
+        
+        # Handle invalid page numbers
+        if page > paginator.num_pages:
+            page = paginator.num_pages if paginator.num_pages > 0 else 1
+            
+        page_obj = paginator.get_page(page)
+        
+        # Serialize data
+        venues_data = []
+        for venue in page_obj.object_list:
+            try:
+                venues_data.append({
+                    'id': venue.id,
+                    'name': venue.name,
+                    'code': venue.code,
+                    'venue_type': venue.get_venue_type_display(),
+                    'venue_type_code': venue.venue_type,
+                    'capacity': venue.capacity,
+                    'building': venue.building,
+                    'floor': venue.floor if venue.floor else '-',
+                    'has_projector': venue.has_projector,
+                    'has_computers': venue.has_computers,
+                    'is_available': venue.is_available,
+                    'timetable_count': venue.timetable_count,
+                })
+            except Exception as e:
+                print(f"Error serializing venue {venue.id}: {str(e)}")
+                continue
+        
+        return JsonResponse({
+            'success': True,
+            'venues': venues_data,
+            'pagination': {
+                'current_page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_items': total_count,
+                'has_previous': page_obj.has_previous(),
+                'has_next': page_obj.has_next(),
+                'per_page': per_page,
+            }
+        })
+        
+    except Exception as e:
+        print("Error in venue_list_ajax:")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def venue_detail_ajax(request, venue_id):
+    """
+    AJAX endpoint to get venue details
+    """
+    try:
+        venue = get_object_or_404(Venue, id=venue_id)
+        
+        # Get timetable slots for this venue
+        timetable_slots = TimetableSlot.objects.filter(
+            venue=venue,
+            is_active=True,
+            unit_allocation__semester__is_current=True
+        ).select_related(
+            'unit_allocation__unit',
+            'unit_allocation__lecturer__user',
+            'programme'
+        ).order_by('day_of_week', 'start_time')
+        
+        # Group by day
+        timetable_by_day = {}
+        for slot in timetable_slots:
+            day = slot.get_day_of_week_display()
+            if day not in timetable_by_day:
+                timetable_by_day[day] = []
+            
+            timetable_by_day[day].append({
+                'id': slot.id,
+                'unit_code': slot.unit_allocation.unit.code,
+                'unit_name': slot.unit_allocation.unit.name,
+                'lecturer': slot.unit_allocation.lecturer.user.get_full_name(),
+                'programme': slot.programme.code,
+                'year_level': slot.year_level,
+                'start_time': slot.start_time.strftime('%H:%M'),
+                'end_time': slot.end_time.strftime('%H:%M'),
+            })
+        
+        venue_data = {
+            'id': venue.id,
+            'name': venue.name,
+            'code': venue.code,
+            'venue_type': venue.get_venue_type_display(),
+            'venue_type_code': venue.venue_type,
+            'capacity': venue.capacity,
+            'building': venue.building,
+            'floor': venue.floor if venue.floor else '',
+            'has_projector': venue.has_projector,
+            'has_computers': venue.has_computers,
+            'is_available': venue.is_available,
+            'timetable': timetable_by_day,
+            'total_slots': timetable_slots.count(),
+        }
+        
+        return JsonResponse({
+            'success': True,
+            'venue': venue_data
+        })
+        
+    except Venue.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Venue not found'
+        }, status=404)
+    except Exception as e:
+        print(f"Error in venue_detail_ajax: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def venue_create_ajax(request):
+    """
+    AJAX endpoint to create a new venue
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        required_fields = ['name', 'code', 'venue_type', 'capacity', 'building']
+        for field in required_fields:
+            if not data.get(field):
+                return JsonResponse({
+                    'success': False,
+                    'error': f'{field.replace("_", " ").title()} is required'
+                }, status=400)
+        
+        # Check if code already exists
+        if Venue.objects.filter(code=data['code'].upper()).exists():
+            return JsonResponse({
+                'success': False,
+                'error': f'Venue code "{data["code"]}" already exists'
+            }, status=400)
+        
+        # Validate capacity
+        try:
+            capacity = int(data['capacity'])
+            if capacity < 1:
+                raise ValueError
+        except (ValueError, TypeError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Capacity must be a positive number'
+            }, status=400)
+        
+        # Create venue
+        with transaction.atomic():
+            venue = Venue.objects.create(
+                name=data['name'].strip(),
+                code=data['code'].strip().upper(),
+                venue_type=data['venue_type'],
+                capacity=capacity,
+                building=data['building'].strip(),
+                floor=data.get('floor', '').strip(),
+                has_projector=bool(data.get('has_projector', False)),
+                has_computers=bool(data.get('has_computers', False)),
+                is_available=bool(data.get('is_available', True)),
+            )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Venue created successfully',
+            'venue': {
+                'id': venue.id,
+                'name': venue.name,
+                'code': venue.code,
+                'venue_type': venue.get_venue_type_display(),
+                'capacity': venue.capacity,
+                'building': venue.building,
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        print(f"Error in venue_create_ajax: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["PUT", "PATCH"])
+def venue_update_ajax(request, venue_id):
+    """
+    AJAX endpoint to update a venue
+    """
+    try:
+        venue = get_object_or_404(Venue, id=venue_id)
+        data = json.loads(request.body)
+        
+        # Check if code is being changed and already exists
+        if 'code' in data and data['code'].upper() != venue.code:
+            if Venue.objects.filter(code=data['code'].upper()).exclude(id=venue_id).exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Venue code "{data["code"]}" already exists'
+                }, status=400)
+        
+        # Validate capacity if provided
+        if 'capacity' in data:
+            try:
+                capacity = int(data['capacity'])
+                if capacity < 1:
+                    raise ValueError
+            except (ValueError, TypeError):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Capacity must be a positive number'
+                }, status=400)
+        
+        # Update venue
+        with transaction.atomic():
+            if 'name' in data:
+                venue.name = data['name'].strip()
+            if 'code' in data:
+                venue.code = data['code'].strip().upper()
+            if 'venue_type' in data:
+                venue.venue_type = data['venue_type']
+            if 'capacity' in data:
+                venue.capacity = int(data['capacity'])
+            if 'building' in data:
+                venue.building = data['building'].strip()
+            if 'floor' in data:
+                venue.floor = data['floor'].strip()
+            if 'has_projector' in data:
+                venue.has_projector = bool(data['has_projector'])
+            if 'has_computers' in data:
+                venue.has_computers = bool(data['has_computers'])
+            if 'is_available' in data:
+                venue.is_available = bool(data['is_available'])
+            
+            venue.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Venue updated successfully',
+            'venue': {
+                'id': venue.id,
+                'name': venue.name,
+                'code': venue.code,
+                'venue_type': venue.get_venue_type_display(),
+                'capacity': venue.capacity,
+                'building': venue.building,
+                'is_available': venue.is_available,
+            }
+        })
+        
+    except Venue.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Venue not found'
+        }, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        print(f"Error in venue_update_ajax: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def venue_delete_ajax(request, venue_id):
+    """
+    AJAX endpoint to delete a venue
+    """
+    try:
+        venue = get_object_or_404(Venue, id=venue_id)
+        
+        # Check if venue has timetable slots
+        timetable_count = venue.timetable_slots.filter(is_active=True).count()
+        if timetable_count > 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'Cannot delete venue. It has {timetable_count} active timetable slot(s). Please remove or reassign them first.'
+            }, status=400)
+        
+        venue_name = venue.name
+        venue.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Venue "{venue_name}" deleted successfully'
+        })
+        
+    except Venue.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Venue not found'
+        }, status=404)
+    except Exception as e:
+        print(f"Error in venue_delete_ajax: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def venue_toggle_availability_ajax(request, venue_id):
+    """
+    AJAX endpoint to toggle venue availability
+    """
+    try:
+        venue = get_object_or_404(Venue, id=venue_id)
+        venue.is_available = not venue.is_available
+        venue.save()
+        
+        status = "available" if venue.is_available else "unavailable"
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Venue marked as {status}',
+            'is_available': venue.is_available
+        })
+        
+    except Venue.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Venue not found'
+        }, status=404)
+    except Exception as e:
+        print(f"Error in venue_toggle_availability_ajax: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def venue_buildings_ajax(request):
+    """
+    AJAX endpoint to get unique building names for filter
+    """
+    try:
+        buildings = Venue.objects.values_list('building', flat=True).distinct().order_by('building')
+        
+        return JsonResponse({
+            'success': True,
+            'buildings': list(buildings)
+        })
+        
+    except Exception as e:
+        print(f"Error in venue_buildings_ajax: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def venue_export_ajax(request):
+    """
+    AJAX endpoint to export venues data
+    """
+    try:
+        # Get all venues
+        venues = Venue.objects.all().order_by('building', 'name')
+        
+        venues_data = []
+        for venue in venues:
+            venues_data.append({
+                'code': venue.code,
+                'name': venue.name,
+                'type': venue.get_venue_type_display(),
+                'capacity': venue.capacity,
+                'building': venue.building,
+                'floor': venue.floor if venue.floor else '-',
+                'projector': 'Yes' if venue.has_projector else 'No',
+                'computers': 'Yes' if venue.has_computers else 'No',
+                'available': 'Yes' if venue.is_available else 'No',
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'venues': venues_data,
+            'total': len(venues_data)
+        })
+        
+    except Exception as e:
+        print(f"Error in venue_export_ajax: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=400)

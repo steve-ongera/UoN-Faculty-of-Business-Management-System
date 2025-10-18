@@ -628,7 +628,7 @@
             <div class="submenu" id="submenu-timetable">
                 <a href="{% url 'timetable_view'%}" class="submenu-item {% if request.resolver_match.url_name == 'timetable_view' %}active{% endif %}">View Timetable</a>
                 <a href="{% url 'timetable_create'%}" class="submenu-item {% if request.resolver_match.url_name == 'timetable_create' %}active{% endif %}">Create Timetable</a>
-                <a href="#" class="submenu-item {% if request.resolver_match.url_name == 'venues' %}active{% endif %}">Venues</a>
+                <a href="{% url 'venue_list'%}" class="submenu-item {% if request.resolver_match.url_name == 'venue_list' %}active{% endif %}">Venues</a>
             </div>
 
             <div class="menu-item has-submenu {% if 'fees' in request.resolver_match.url_name %}active{% endif %}" data-submenu="fees">
