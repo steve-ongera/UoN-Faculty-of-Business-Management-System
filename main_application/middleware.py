@@ -388,3 +388,185 @@ class ThreadLocalMiddleware(MiddlewareMixin):
         if hasattr(current_thread(), 'request'):
             delattr(current_thread(), 'request')
         return response
+    
+
+#Chatbot middleware
+from django.utils import timezone
+from django.utils.deprecation import MiddlewareMixin
+from .models import ChatbotConversation, ChatMessage, CrisisAlert
+import json
+
+
+class ChatbotMiddleware(MiddlewareMixin):
+    """
+    Middleware to handle chatbot-related functionality across all requests
+    """
+    
+    def process_request(self, request):
+        """
+        Process incoming requests to check for active chatbot sessions
+        """
+        if request.user.is_authenticated:
+            # Check for active conversations
+            request.active_chatbot_conversation = ChatbotConversation.objects.filter(
+                user=request.user,
+                status='ACTIVE'
+            ).first()
+            
+            # Check for unresolved crisis alerts
+            if hasattr(request.user, 'student_profile'):
+                request.has_crisis_alert = CrisisAlert.objects.filter(
+                    student=request.user.student_profile,
+                    status__in=['DETECTED', 'NOTIFIED', 'IN_PROGRESS']
+                ).exists()
+            else:
+                request.has_crisis_alert = False
+        else:
+            request.active_chatbot_conversation = None
+            request.has_crisis_alert = False
+        
+        return None
+    
+    def process_response(self, request, response):
+        """
+        Process responses to add chatbot-related headers
+        """
+        if request.user.is_authenticated and hasattr(request, 'active_chatbot_conversation'):
+            # Add custom headers for AJAX requests
+            if request.active_chatbot_conversation:
+                response['X-Chatbot-Active'] = 'true'
+                response['X-Chatbot-Conversation-Id'] = str(
+                    request.active_chatbot_conversation.conversation_id
+                )
+        
+        return response
+
+
+class ChatbotAnalyticsMiddleware(MiddlewareMixin):
+    """
+    Middleware to track chatbot usage and analytics
+    """
+    
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        """
+        Track chatbot-related page views
+        """
+        if request.path.startswith('/chatbot/'):
+            # Mark the request time for response time calculation
+            request._chatbot_request_start = timezone.now()
+        
+        return None
+    
+    def process_response(self, request, response):
+        """
+        Calculate and store analytics data
+        """
+        if hasattr(request, '_chatbot_request_start'):
+            # Calculate response time
+            response_time = (timezone.now() - request._chatbot_request_start).total_seconds()
+            
+            # Add response time header for debugging
+            response['X-Chatbot-Response-Time'] = f"{response_time:.3f}s"
+        
+        return response
+
+
+class ChatbotSecurityMiddleware(MiddlewareMixin):
+    """
+    Security middleware for chatbot to detect and prevent abuse
+    """
+    
+    RATE_LIMIT_MESSAGES = 100  # Max messages per hour
+    RATE_LIMIT_CONVERSATIONS = 20  # Max new conversations per hour
+    
+    def process_request(self, request):
+        """
+        Check for potential abuse or suspicious activity
+        """
+        if not request.user.is_authenticated:
+            return None
+        
+        if request.path == '/chatbot/send-message/' and request.method == 'POST':
+            # Check message rate limit
+            one_hour_ago = timezone.now() - timezone.timedelta(hours=1)
+            recent_messages = ChatMessage.objects.filter(
+                conversation__user=request.user,
+                created_at__gte=one_hour_ago,
+                message_type='USER'
+            ).count()
+            
+            if recent_messages >= self.RATE_LIMIT_MESSAGES:
+                from django.http import JsonResponse
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Rate limit exceeded. Please try again later.',
+                    'rate_limit': True
+                }, status=429)
+        
+        elif request.path == '/chatbot/new-conversation/' and request.method == 'POST':
+            # Check conversation creation rate limit
+            one_hour_ago = timezone.now() - timezone.timedelta(hours=1)
+            recent_conversations = ChatbotConversation.objects.filter(
+                user=request.user,
+                started_at__gte=one_hour_ago
+            ).count()
+            
+            if recent_conversations >= self.RATE_LIMIT_CONVERSATIONS:
+                from django.http import JsonResponse
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Too many conversations created. Please try again later.',
+                    'rate_limit': True
+                }, status=429)
+        
+        return None
+
+
+class ChatbotSessionMiddleware(MiddlewareMixin):
+    """
+    Middleware to manage chatbot session state
+    """
+    
+    def process_request(self, request):
+        """
+        Initialize chatbot session data
+        """
+        if request.user.is_authenticated:
+            # Get or create session data for chatbot
+            if 'chatbot_session' not in request.session:
+                request.session['chatbot_session'] = {
+                    'initialized_at': timezone.now().isoformat(),
+                    'message_count': 0,
+                    'last_activity': timezone.now().isoformat(),
+                }
+            
+            # Update last activity
+            request.session['chatbot_session']['last_activity'] = timezone.now().isoformat()
+            request.session.modified = True
+        
+        return None
+
+
+class CrisisDetectionMiddleware(MiddlewareMixin):
+    """
+    Middleware to monitor and respond to crisis situations
+    """
+    
+    def process_request(self, request):
+        """
+        Check for active crisis alerts that need immediate attention
+        """
+        if request.user.is_authenticated and hasattr(request.user, 'student_profile'):
+            # Check for critical unresolved alerts
+            critical_alert = CrisisAlert.objects.filter(
+                student=request.user.student_profile,
+                severity='CRITICAL',
+                status__in=['DETECTED', 'NOTIFIED'],
+                detected_at__gte=timezone.now() - timezone.timedelta(hours=24)
+            ).first()
+            
+            if critical_alert:
+                # Set flag for templates to display emergency banner
+                request.critical_crisis_alert = critical_alert
+        
+        return None

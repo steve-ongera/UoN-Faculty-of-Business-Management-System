@@ -235,6 +235,22 @@ urlpatterns = [
     path('api/venues/<int:venue_id>/toggle-availability/', views.venue_toggle_availability_ajax, name='venue_toggle_availability_ajax'),
     path('api/venues/buildings/', views.venue_buildings_ajax, name='venue_buildings_ajax'),
     path('api/venues/export/', views.venue_export_ajax, name='venue_export_ajax'),
+
+    # Main chatbot endpoints
+    path('send-message/', views.chatbot_send_message, name='send_message'),
+    path('new-conversation/', views.chatbot_new_conversation, name='new_conversation'),
+    path('conversation/<uuid:conversation_id>/', views.chatbot_get_conversation, name='get_conversation'),
+    path('conversations/', views.chatbot_get_conversations, name='get_conversations'),
+    path('close-conversation/<uuid:conversation_id>/', views.chatbot_close_conversation, name='close_conversation'),
+    path('rate-message/', views.chatbot_rate_message, name='rate_message'),
+    path('submit-feedback/', views.chatbot_submit_feedback, name='submit_feedback'),
+    path('mental-health-assessment/', views.chatbot_mental_health_assessment, name='mental_health_assessment'),
+    path('search-kb/', views.chatbot_search_knowledge_base, name='search_kb'),
+    path('rate-kb/<uuid:kb_id>/', views.chatbot_rate_kb_entry, name='rate_kb'),
+    path('dashboard/', views.chatbot_dashboard, name='dashboard'),
+    path('crisis-alerts/', views.chatbot_crisis_alerts, name='crisis_alerts'),
+    path('export/<uuid:conversation_id>/', views.chatbot_export_conversation, name='export_conversation'),
+    path('analytics-report/', views.chatbot_analytics_report, name='analytics_report'),
     
 ]
 
