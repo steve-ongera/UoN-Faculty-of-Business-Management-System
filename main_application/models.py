@@ -1067,3 +1067,501 @@ class DataExportLog(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.export_type} - {self.timestamp}"
+
+
+# Add these models to your existing models.py
+
+from django.db import models
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+import uuid
+
+User = get_user_model()
+
+# ========================
+# AI CHATBOT SYSTEM
+# ========================
+
+class ChatbotConversation(models.Model):
+    """Track individual chatbot conversations"""
+    CONVERSATION_TYPES = (
+        ('ACADEMIC', 'Academic Support'),
+        ('MENTAL_HEALTH', 'Mental Health Support'),
+        ('GENERAL', 'General Inquiry'),
+        ('REGISTRATION', 'Registration Help'),
+        ('FEES', 'Fees Inquiry'),
+        ('GRADES', 'Grades Inquiry'),
+        ('TIMETABLE', 'Timetable Inquiry'),
+        ('CAREER', 'Career Guidance'),
+        ('EMERGENCY', 'Emergency/Crisis'),
+    )
+    
+    STATUS_CHOICES = (
+        ('ACTIVE', 'Active'),
+        ('CLOSED', 'Closed'),
+        ('ESCALATED', 'Escalated to Human'),
+        ('ARCHIVED', 'Archived'),
+    )
+    
+    SENTIMENT_CHOICES = (
+        ('POSITIVE', 'Positive'),
+        ('NEUTRAL', 'Neutral'),
+        ('NEGATIVE', 'Negative'),
+        ('CRISIS', 'Crisis - Needs Immediate Attention'),
+    )
+    
+    conversation_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chatbot_conversations')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, null=True, blank=True, 
+                                related_name='chat_conversations')
+    
+    # Conversation metadata
+    conversation_type = models.CharField(max_length=20, choices=CONVERSATION_TYPES, default='GENERAL')
+    title = models.CharField(max_length=200, blank=True)  # Auto-generated from first message
+    
+    # Status and sentiment
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    overall_sentiment = models.CharField(max_length=20, choices=SENTIMENT_CHOICES, default='NEUTRAL')
+    
+    # Timestamps
+    started_at = models.DateTimeField(auto_now_add=True)
+    last_message_at = models.DateTimeField(auto_now=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    
+    # AI metrics
+    total_messages = models.IntegerField(default=0)
+    ai_responses = models.IntegerField(default=0)
+    user_messages = models.IntegerField(default=0)
+    avg_response_time_seconds = models.FloatField(default=0.0)
+    
+    # Escalation
+    escalated = models.BooleanField(default=False)
+    escalated_at = models.DateTimeField(null=True, blank=True)
+    escalated_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='escalated_chats', 
+                                     limit_choices_to={'user_type__in': ['DEAN', 'COD', 'ICT_ADMIN']})
+    escalation_reason = models.TextField(blank=True)
+    
+    # Satisfaction
+    user_satisfaction = models.IntegerField(null=True, blank=True, 
+                                           help_text="1-5 rating")
+    user_feedback = models.TextField(blank=True)
+    
+    # Session info
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    device_type = models.CharField(max_length=50, blank=True)
+    
+    class Meta:
+        db_table = 'chatbot_conversations'
+        ordering = ['-last_message_at']
+        indexes = [
+            models.Index(fields=['user', '-started_at']),
+            models.Index(fields=['status', '-started_at']),
+            models.Index(fields=['conversation_type', '-started_at']),
+            models.Index(fields=['overall_sentiment', 'status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.conversation_type} - {self.started_at}"
+    
+    def close_conversation(self):
+        """Close the conversation"""
+        self.status = 'CLOSED'
+        self.closed_at = timezone.now()
+        self.save()
+    
+    def escalate(self, reason, escalated_to=None):
+        """Escalate conversation to human support"""
+        self.escalated = True
+        self.escalated_at = timezone.now()
+        self.escalated_to = escalated_to
+        self.escalation_reason = reason
+        self.status = 'ESCALATED'
+        self.save()
+
+
+class ChatMessage(models.Model):
+    """Individual messages in chatbot conversations"""
+    MESSAGE_TYPES = (
+        ('USER', 'User Message'),
+        ('AI', 'AI Response'),
+        ('SYSTEM', 'System Message'),
+        ('HUMAN', 'Human Support'),
+    )
+    
+    SENTIMENT_CHOICES = (
+        ('POSITIVE', 'Positive'),
+        ('NEUTRAL', 'Neutral'),
+        ('NEGATIVE', 'Negative'),
+        ('ANXIOUS', 'Anxious'),
+        ('DEPRESSED', 'Depressed'),
+        ('CRISIS', 'Crisis'),
+    )
+    
+    message_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    conversation = models.ForeignKey(ChatbotConversation, on_delete=models.CASCADE, 
+                                     related_name='messages')
+    
+    # Message content
+    message_type = models.CharField(max_length=10, choices=MESSAGE_TYPES)
+    content = models.TextField()
+    
+    # AI processing
+    processed_content = models.TextField(blank=True)  # Cleaned/processed version
+    intent_detected = models.CharField(max_length=100, blank=True)  # Academic, Mental Health, etc.
+    entities_extracted = models.JSONField(null=True, blank=True)  # Named entities, dates, etc.
+    confidence_score = models.FloatField(null=True, blank=True)  # AI confidence (0-1)
+    
+    # Sentiment analysis
+    sentiment = models.CharField(max_length=20, choices=SENTIMENT_CHOICES, default='NEUTRAL')
+    sentiment_score = models.FloatField(null=True, blank=True)  # -1 to 1
+    emotion_scores = models.JSONField(null=True, blank=True)  # Joy, sadness, anger, etc.
+    
+    # Crisis detection
+    is_crisis = models.BooleanField(default=False)
+    crisis_keywords = models.JSONField(null=True, blank=True)
+    crisis_level = models.CharField(max_length=20, blank=True)  # LOW, MEDIUM, HIGH, CRITICAL
+    
+    # Response metadata
+    response_time_seconds = models.FloatField(null=True, blank=True)
+    model_used = models.CharField(max_length=100, blank=True)  # GPT-4, Custom Model, etc.
+    tokens_used = models.IntegerField(null=True, blank=True)
+    
+    # Attachments
+    has_attachment = models.BooleanField(default=False)
+    attachment = models.FileField(upload_to='chatbot_attachments/', null=True, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Feedback
+    was_helpful = models.BooleanField(null=True, blank=True)
+    feedback_text = models.TextField(blank=True)
+    
+    class Meta:
+        db_table = 'chat_messages'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['conversation', 'created_at']),
+            models.Index(fields=['message_type', 'created_at']),
+            models.Index(fields=['is_crisis', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.conversation.user.username} - {self.message_type} - {self.created_at}"
+
+
+class MentalHealthAssessment(models.Model):
+    """Track mental health assessments from chatbot interactions"""
+    ASSESSMENT_TYPES = (
+        ('PHQ9', 'PHQ-9 (Depression)'),
+        ('GAD7', 'GAD-7 (Anxiety)'),
+        ('STRESS', 'Stress Assessment'),
+        ('WELLBEING', 'General Wellbeing'),
+        ('CRISIS', 'Crisis Assessment'),
+    )
+    
+    RISK_LEVELS = (
+        ('MINIMAL', 'Minimal Risk'),
+        ('MILD', 'Mild Risk'),
+        ('MODERATE', 'Moderate Risk'),
+        ('SEVERE', 'Severe Risk'),
+        ('CRITICAL', 'Critical - Immediate Intervention'),
+    )
+    
+    assessment_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, 
+                                related_name='mental_health_assessments')
+    conversation = models.ForeignKey(ChatbotConversation, on_delete=models.CASCADE, 
+                                     related_name='assessments', null=True, blank=True)
+    
+    # Assessment details
+    assessment_type = models.CharField(max_length=20, choices=ASSESSMENT_TYPES)
+    score = models.IntegerField()
+    max_score = models.IntegerField()
+    risk_level = models.CharField(max_length=20, choices=RISK_LEVELS)
+    
+    # Detailed results
+    responses = models.JSONField()  # Store all question-answer pairs
+    interpretation = models.TextField()
+    recommendations = models.TextField()
+    
+    # Follow-up
+    requires_followup = models.BooleanField(default=False)
+    followup_date = models.DateField(null=True, blank=True)
+    followup_completed = models.BooleanField(default=False)
+    
+    # Professional referral
+    professional_referral_recommended = models.BooleanField(default=False)
+    referral_sent = models.BooleanField(default=False)
+    referral_type = models.CharField(max_length=100, blank=True)  # Counselor, Psychiatrist, etc.
+    
+    # Timestamps
+    assessed_at = models.DateTimeField(auto_now_add=True)
+    
+    # Consent and privacy
+    student_consented = models.BooleanField(default=True)
+    anonymous = models.BooleanField(default=False)
+    
+    class Meta:
+        db_table = 'mental_health_assessments'
+        ordering = ['-assessed_at']
+        indexes = [
+            models.Index(fields=['student', '-assessed_at']),
+            models.Index(fields=['risk_level', '-assessed_at']),
+            models.Index(fields=['requires_followup', 'followup_completed']),
+        ]
+    
+    def __str__(self):
+        return f"{self.student.registration_number} - {self.assessment_type} - {self.risk_level}"
+
+
+class ChatbotKnowledgeBase(models.Model):
+    """Knowledge base for chatbot responses"""
+    CATEGORY_CHOICES = (
+        ('ACADEMIC', 'Academic'),
+        ('MENTAL_HEALTH', 'Mental Health'),
+        ('REGISTRATION', 'Registration'),
+        ('FEES', 'Fees'),
+        ('TIMETABLE', 'Timetable'),
+        ('GENERAL', 'General'),
+        ('FAQ', 'FAQ'),
+        ('POLICY', 'Policy'),
+        ('SUPPORT', 'Support Services'),
+    )
+    
+    kb_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    
+    # Content
+    question = models.TextField()
+    answer = models.TextField()
+    keywords = models.JSONField(default=list)  # For matching
+    
+    # Alternative phrasings
+    similar_questions = models.JSONField(default=list)
+    
+    # Metadata
+    is_active = models.BooleanField(default=True)
+    priority = models.IntegerField(default=0)  # Higher priority = shown first
+    
+    # Usage statistics
+    times_used = models.IntegerField(default=0)
+    helpful_count = models.IntegerField(default=0)
+    not_helpful_count = models.IntegerField(default=0)
+    
+    # Version control
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, 
+                                   related_name='created_kb_entries')
+    
+    # Links to resources
+    related_links = models.JSONField(default=list)
+    
+    class Meta:
+        db_table = 'chatbot_knowledge_base'
+        ordering = ['-priority', 'category']
+        indexes = [
+            models.Index(fields=['category', 'is_active']),
+            models.Index(fields=['-priority']),
+        ]
+    
+    def __str__(self):
+        return f"{self.category} - {self.question[:50]}"
+
+
+class ChatbotIntent(models.Model):
+    """Machine learning training data for intent classification"""
+    intent_name = models.CharField(max_length=100, unique=True)
+    description = models.TextField()
+    category = models.CharField(max_length=50)
+    
+    # Training examples
+    training_phrases = models.JSONField(default=list)  # List of example phrases
+    
+    # Response templates
+    response_templates = models.JSONField(default=list)
+    
+    # Parameters to extract
+    parameters = models.JSONField(default=list)  # Entities to extract
+    
+    # Actions to trigger
+    action_type = models.CharField(max_length=100, blank=True)  # Function to call
+    requires_authentication = models.BooleanField(default=False)
+    
+    # Priority
+    priority = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    
+    # Statistics
+    times_detected = models.IntegerField(default=0)
+    accuracy_score = models.FloatField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'chatbot_intents'
+        ordering = ['-priority', 'intent_name']
+    
+    def __str__(self):
+        return f"{self.intent_name} - {self.category}"
+
+
+class ChatbotFeedback(models.Model):
+    """User feedback on chatbot interactions"""
+    FEEDBACK_TYPES = (
+        ('RATING', 'Rating'),
+        ('BUG', 'Bug Report'),
+        ('SUGGESTION', 'Suggestion'),
+        ('COMPLAINT', 'Complaint'),
+        ('PRAISE', 'Praise'),
+    )
+    
+    feedback_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    conversation = models.ForeignKey(ChatbotConversation, on_delete=models.CASCADE, 
+                                     related_name='feedback')
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='feedback')
+    
+    feedback_type = models.CharField(max_length=20, choices=FEEDBACK_TYPES)
+    rating = models.IntegerField(null=True, blank=True)  # 1-5
+    
+    # Detailed feedback
+    comment = models.TextField(blank=True)
+    what_worked = models.TextField(blank=True)
+    what_needs_improvement = models.TextField(blank=True)
+    
+    # Sentiment
+    sentiment = models.CharField(max_length=20, blank=True)
+    
+    # Response
+    responded = models.BooleanField(default=False)
+    response_text = models.TextField(blank=True)
+    responded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     related_name='chatbot_feedback_responses')
+    responded_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'chatbot_feedback'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Feedback - {self.feedback_type} - {self.created_at}"
+
+
+class CrisisAlert(models.Model):
+    """Track crisis situations detected by chatbot"""
+    CRISIS_TYPES = (
+        ('SUICIDE', 'Suicidal Thoughts'),
+        ('SELF_HARM', 'Self Harm'),
+        ('SEVERE_DEPRESSION', 'Severe Depression'),
+        ('PANIC', 'Panic Attack'),
+        ('ABUSE', 'Abuse'),
+        ('VIOLENCE', 'Violence'),
+        ('EMERGENCY', 'Medical Emergency'),
+    )
+    
+    STATUS_CHOICES = (
+        ('DETECTED', 'Detected'),
+        ('NOTIFIED', 'Authorities Notified'),
+        ('IN_PROGRESS', 'Intervention in Progress'),
+        ('RESOLVED', 'Resolved'),
+        ('FALSE_ALARM', 'False Alarm'),
+    )
+    
+    alert_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, 
+                                related_name='crisis_alerts')
+    conversation = models.ForeignKey(ChatbotConversation, on_delete=models.CASCADE,
+                                     related_name='crisis_alerts')
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE,
+                                related_name='crisis_alerts')
+    
+    # Crisis details
+    crisis_type = models.CharField(max_length=20, choices=CRISIS_TYPES)
+    severity = models.CharField(max_length=20)  # LOW, MEDIUM, HIGH, CRITICAL
+    detected_keywords = models.JSONField()
+    confidence = models.FloatField()  # AI confidence in crisis detection
+    
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DETECTED')
+    
+    # Response
+    auto_response_sent = models.BooleanField(default=False)
+    auto_response_text = models.TextField(blank=True)
+    
+    # Notification
+    authorities_notified = models.BooleanField(default=False)
+    notified_users = models.ManyToManyField(User, related_name='received_crisis_alerts', blank=True)
+    notification_sent_at = models.DateTimeField(null=True, blank=True)
+    
+    # Follow-up
+    intervention_notes = models.TextField(blank=True)
+    handled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='handled_crisis_alerts')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    
+    # Timestamps
+    detected_at = models.DateTimeField(auto_now_add=True)
+    
+    # Emergency contacts
+    emergency_contact_called = models.BooleanField(default=False)
+    
+    class Meta:
+        db_table = 'crisis_alerts'
+        ordering = ['-detected_at']
+        indexes = [
+            models.Index(fields=['student', '-detected_at']),
+            models.Index(fields=['status', '-detected_at']),
+            models.Index(fields=['severity', 'status']),
+        ]
+    
+    def __str__(self):
+        return f"CRISIS: {self.student.registration_number} - {self.crisis_type} - {self.severity}"
+
+
+class ChatbotAnalytics(models.Model):
+    """Daily analytics for chatbot usage"""
+    date = models.DateField(unique=True, db_index=True)
+    
+    # Usage metrics
+    total_conversations = models.IntegerField(default=0)
+    total_messages = models.IntegerField(default=0)
+    unique_users = models.IntegerField(default=0)
+    
+    # Conversation types
+    academic_conversations = models.IntegerField(default=0)
+    mental_health_conversations = models.IntegerField(default=0)
+    general_conversations = models.IntegerField(default=0)
+    
+    # Sentiment
+    positive_sentiment_count = models.IntegerField(default=0)
+    neutral_sentiment_count = models.IntegerField(default=0)
+    negative_sentiment_count = models.IntegerField(default=0)
+    crisis_detected_count = models.IntegerField(default=0)
+    
+    # Performance
+    avg_response_time = models.FloatField(default=0.0)
+    avg_satisfaction_rating = models.FloatField(null=True, blank=True)
+    
+    # Escalations
+    escalated_conversations = models.IntegerField(default=0)
+    
+    # AI metrics
+    total_tokens_used = models.IntegerField(default=0)
+    avg_confidence_score = models.FloatField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'chatbot_analytics'
+        ordering = ['-date']
+    
+    def __str__(self):
+        return f"Analytics - {self.date}"
