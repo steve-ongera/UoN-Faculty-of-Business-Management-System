@@ -2104,7 +2104,6 @@ def delete_conversation(request, user_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Avg, Count, Q, F
@@ -2131,7 +2130,12 @@ def get_classification(gpa):
 
 @login_required
 def student_grades_view(request):
-    """View for displaying student grades organized by year and semester"""
+    """
+    View for displaying student grades organized by year level.
+    Each year level shows ONE academic year with its semesters.
+    Structure: Year 1 -> 2023/2024 -> Sem 1, Sem 2, Sem 3
+               Year 2 -> 2024/2025 -> Sem 1, Sem 2, Sem 3
+    """
     
     # Get student profile
     try:
@@ -2155,20 +2159,22 @@ def student_grades_view(request):
         'semester__semester_number'
     )
     
-    # Organize grades by ACTUAL academic year and semester
-    # Structure: {year_level: {academic_year_id: {semester_num: {...}}}}
-    grades_structure = OrderedDict()
+    # Structure: {year_level: {academic_year: {semester_num: {...}}}}
+    grades_by_year = OrderedDict()
     
     total_credits_earned = 0
     total_grade_points = Decimal('0.00')
     total_units_completed = 0
+    
+    # Track which academic year each year level belongs to
+    year_academic_mapping = {}
     
     for enrollment in enrollments:
         semester = enrollment.semester
         academic_year = semester.academic_year
         semester_num = semester.semester_number
         
-        # Get the correct year level from ProgrammeUnit
+        # Get the year level from ProgrammeUnit
         try:
             program_unit = ProgrammeUnit.objects.filter(
                 programme=student.programme,
@@ -2176,34 +2182,39 @@ def student_grades_view(request):
                 semester=semester_num
             ).first()
             
-            if program_unit:
-                year_level = program_unit.year_level
-            else:
+            if not program_unit:
                 # Fallback: try without semester constraint
                 program_unit = ProgrammeUnit.objects.filter(
                     programme=student.programme,
                     unit=enrollment.unit
                 ).first()
-                year_level = program_unit.year_level if program_unit else 1
+            
+            year_level = program_unit.year_level if program_unit else 1
         except Exception:
             year_level = 1
         
-        # Initialize nested structure
-        if year_level not in grades_structure:
-            grades_structure[year_level] = OrderedDict()
+        # Map year level to the first academic year we encounter for it
+        if year_level not in year_academic_mapping:
+            year_academic_mapping[year_level] = academic_year
         
-        if academic_year.id not in grades_structure[year_level]:
-            grades_structure[year_level][academic_year.id] = {
-                'academic_year': academic_year,
-                'year_code': academic_year.year_code,
+        # Use the mapped academic year for this year level
+        mapped_academic_year = year_academic_mapping[year_level]
+        
+        # Initialize structures
+        if year_level not in grades_by_year:
+            grades_by_year[year_level] = {
+                'year_level': year_level,
+                'year_label': f'Year {year_level}',
+                'academic_year': mapped_academic_year,
                 'semesters': OrderedDict()
             }
         
-        if semester_num not in grades_structure[year_level][academic_year.id]['semesters']:
-            grades_structure[year_level][academic_year.id]['semesters'][semester_num] = {
+        # Initialize semester if not exists
+        if semester_num not in grades_by_year[year_level]['semesters']:
+            grades_by_year[year_level]['semesters'][semester_num] = {
                 'semester': semester,
-                'semester_label': f'Semester {semester_num}',
                 'semester_num': semester_num,
+                'semester_label': f'Semester {semester_num}',
                 'units': [],
                 'total_units': 0,
                 'total_credits': 0,
@@ -2213,7 +2224,7 @@ def student_grades_view(request):
                 'semester_points': Decimal('0.00')
             }
         
-        semester_data = grades_structure[year_level][academic_year.id]['semesters'][semester_num]
+        semester_data = grades_by_year[year_level]['semesters'][semester_num]
         
         # Get assessment breakdown
         assessment_breakdown = []
@@ -2240,7 +2251,7 @@ def student_grades_view(request):
                 'percentage': (mark.marks_obtained / component.max_marks) * 100 if component.max_marks > 0 else 0
             })
         
-        # Get final grade
+        # Prepare unit data
         unit_data = {
             'unit_code': enrollment.unit.code,
             'unit_name': enrollment.unit.name,
@@ -2252,6 +2263,7 @@ def student_grades_view(request):
             'has_grade': False
         }
         
+        # Get final grade
         if hasattr(enrollment, 'final_grade'):
             final_grade = enrollment.final_grade
             unit_data.update({
@@ -2278,16 +2290,15 @@ def student_grades_view(request):
         semester_data['total_credits'] += enrollment.unit.credit_hours
     
     # Calculate semester GPAs
-    for year_level in grades_structure:
-        for academic_year_id in grades_structure[year_level]:
-            for semester_num in grades_structure[year_level][academic_year_id]['semesters']:
-                semester_data = grades_structure[year_level][academic_year_id]['semesters'][semester_num]
-                
-                if semester_data['semester_credits'] > 0:
-                    semester_data['semester_gpa'] = round(
-                        semester_data['semester_points'] / semester_data['semester_credits'], 
-                        2
-                    )
+    for year_level in grades_by_year:
+        for semester_num in grades_by_year[year_level]['semesters']:
+            semester_data = grades_by_year[year_level]['semesters'][semester_num]
+            
+            if semester_data['semester_credits'] > 0:
+                semester_data['semester_gpa'] = round(
+                    semester_data['semester_points'] / semester_data['semester_credits'], 
+                    2
+                )
     
     # Calculate cumulative GPA and classification
     cumulative_gpa = Decimal('0.00')
@@ -2297,35 +2308,13 @@ def student_grades_view(request):
         cumulative_gpa = round(total_grade_points / total_credits_earned, 2)
         classification = get_classification(cumulative_gpa)
     
-    # Convert to list for template
-    grades_by_year = []
-    for year_level in sorted(grades_structure.keys()):
-        year_academic_years = []
-        
-        for academic_year_id in grades_structure[year_level]:
-            academic_year_data = grades_structure[year_level][academic_year_id]
-            
-            # Convert semesters to list
-            semesters_list = []
-            for semester_num in sorted(academic_year_data['semesters'].keys()):
-                semesters_list.append(academic_year_data['semesters'][semester_num])
-            
-            year_academic_years.append({
-                'academic_year': academic_year_data['academic_year'],
-                'year_code': academic_year_data['year_code'],
-                'semesters': semesters_list
-            })
-        
-        grades_by_year.append({
-            'year_level': year_level,
-            'year_label': f'Year {year_level}',
-            'academic_years': year_academic_years
-        })
+    # Convert to list for template (sorted by year level)
+    grades_by_year_list = [grades_by_year[year] for year in sorted(grades_by_year.keys())]
     
     context = {
         'student': student,
         'programme': student.programme,
-        'grades_by_year': grades_by_year,
+        'grades_by_year': grades_by_year_list,
         'cumulative_gpa': cumulative_gpa,
         'classification': classification,
         'total_credits_earned': total_credits_earned,
