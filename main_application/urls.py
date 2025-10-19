@@ -237,10 +237,10 @@ urlpatterns = [
     path('api/venues/export/', views.venue_export_ajax, name='venue_export_ajax'),
 
     # Main chatbot endpoints
-    path('send-message/', views.chatbot_send_message, name='send_message'),
-    path('new-conversation/', views.chatbot_new_conversation, name='new_conversation'),
+    path('chatbot/send-message/', views.chatbot_send_message, name='send_message'),
+    path('chatbot/new-conversation/', views.chatbot_new_conversation, name='new_conversation'),
     path('conversation/<uuid:conversation_id>/', views.chatbot_get_conversation, name='get_conversation'),
-    path('conversations/', views.chatbot_get_conversations, name='get_conversations'),
+    path('chatbot/conversations/', views.chatbot_get_conversations, name='get_conversations'),
     path('close-conversation/<uuid:conversation_id>/', views.chatbot_close_conversation, name='close_conversation'),
     path('rate-message/', views.chatbot_rate_message, name='rate_message'),
     path('submit-feedback/', views.chatbot_submit_feedback, name='submit_feedback'),

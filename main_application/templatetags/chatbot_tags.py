@@ -3,7 +3,9 @@ from django import template
 from django.utils.safestring import mark_safe
 from django.utils import timezone
 from datetime import timedelta
+import logging
 
+logger = logging.getLogger(__name__)
 register = template.Library()
 
 
@@ -12,33 +14,72 @@ def chatbot_widget(context):
     """
     Render the floating chatbot widget
     Usage: {% chatbot_widget %}
-    """
-    request = context['request']
-    user = request.user
     
-    widget_data = {
-        'user': user,
-        'is_authenticated': user.is_authenticated,
+    IMPORTANT: This relies on context processor data, NOT direct DB queries
+    """
+    # Safe default return value
+    safe_default = {
+        'error': None,
+        'is_authenticated': False,
+        'user': None,
         'active_conversation': None,
         'unread_count': 0,
-        'user_type': getattr(user, 'user_type', 'GUEST'),
+        'user_type': 'GUEST',
         'has_crisis_alert': False,
     }
     
-    if user.is_authenticated:
-        # Get active conversation
-        if hasattr(request, 'active_chatbot_conversation'):
-            widget_data['active_conversation'] = request.active_chatbot_conversation
+    try:
+        # Get request from context
+        request = context.get('request')
+        if not request:
+            logger.warning("chatbot_widget: No request in context")
+            safe_default['error'] = 'no_request'
+            return safe_default
         
-        # Check for crisis alerts
-        if hasattr(request, 'has_crisis_alert'):
-            widget_data['has_crisis_alert'] = request.has_crisis_alert
+        # Get user
+        user = getattr(request, 'user', None)
+        if not user:
+            logger.warning("chatbot_widget: No user in request")
+            safe_default['error'] = 'no_user'
+            return safe_default
         
-        # Get student info if applicable
-        if hasattr(user, 'student_profile'):
-            widget_data['student'] = user.student_profile
+        # Build widget data - NO DATABASE QUERIES HERE!
+        widget_data = {
+            'error': None,
+            'user': user,
+            'is_authenticated': user.is_authenticated,
+            'active_conversation': None,
+            'unread_count': 0,  # Get from context processor
+            'user_type': getattr(user, 'user_type', 'GUEST'),
+            'has_crisis_alert': False,
+        }
+        
+        # Only process if authenticated
+        if user.is_authenticated:
+            try:
+                # Get data from context processor (NOT from database!)
+                # These are set by the context processor
+                widget_data['active_conversation'] = context.get('active_chatbot_conversation')
+                widget_data['unread_count'] = context.get('chatbot_unread_count', 0)
+                widget_data['has_crisis_alert'] = context.get('has_active_crisis', False)
+                
+                # Get student info safely
+                if hasattr(user, 'student_profile'):
+                    try:
+                        widget_data['student'] = user.student_profile
+                    except Exception as e:
+                        logger.warning(f"Error loading student profile: {e}")
+                        widget_data['student'] = None
+                        
+            except Exception as e:
+                logger.warning(f"Error in chatbot_widget authenticated section: {e}")
+        
+        return widget_data
     
-    return widget_data
+    except Exception as e:
+        logger.error(f"Critical error in chatbot_widget: {e}", exc_info=True)
+        safe_default['error'] = 'unexpected_error'
+        return safe_default
 
 
 @register.filter
@@ -173,28 +214,21 @@ def chatbot_unread_count(context):
     """
     Get unread message count for current user
     Usage: {% chatbot_unread_count %}
+    
+    IMPORTANT: Gets from context processor, NOT from database
     """
-    from ..models import ChatbotConversation
-    
-    request = context['request']
-    if not request.user.is_authenticated:
+    try:
+        # Try to get from context first (set by context processor)
+        unread_count = context.get('chatbot_unread_count', 0)
+        if unread_count:
+            return unread_count
+        
+        # Fallback: return 0 (don't query database!)
         return 0
     
-    active_conv = ChatbotConversation.objects.filter(
-        user=request.user,
-        status='ACTIVE'
-    ).first()
-    
-    if not active_conv:
+    except Exception as e:
+        logger.warning(f"Error in chatbot_unread_count: {e}")
         return 0
-    
-    # Count AI messages that haven't been rated
-    unread = active_conv.messages.filter(
-        message_type='AI',
-        was_helpful__isnull=True
-    ).count()
-    
-    return unread
 
 
 @register.inclusion_tag('chatbot/crisis_banner.html', takes_context=True)
@@ -203,12 +237,19 @@ def crisis_alert_banner(context):
     Display crisis alert banner if active
     Usage: {% crisis_alert_banner %}
     """
-    request = context['request']
-    
-    return {
-        'show_banner': hasattr(request, 'critical_crisis_alert'),
-        'alert': getattr(request, 'critical_crisis_alert', None),
-    }
+    try:
+        request = context.get('request')
+        
+        return {
+            'show_banner': hasattr(request, 'critical_crisis_alert') if request else False,
+            'alert': getattr(request, 'critical_crisis_alert', None) if request else None,
+        }
+    except Exception as e:
+        logger.warning(f"Error in crisis_alert_banner: {e}")
+        return {
+            'show_banner': False,
+            'alert': None,
+        }
 
 
 @register.filter
@@ -279,7 +320,10 @@ def percentage(value, total):
     """
     if not total or total == 0:
         return 0
-    return round((value / total) * 100, 1)
+    try:
+        return round((value / total) * 100, 1)
+    except Exception:
+        return 0
 
 
 @register.simple_tag
@@ -287,21 +331,32 @@ def chatbot_stats_summary(user):
     """
     Get chatbot statistics summary for user
     Usage: {% chatbot_stats_summary user %}
+    
+    WARNING: This makes database queries - use sparingly!
     """
-    from ..models import ChatbotConversation, ChatMessage
-    from django.db.models import Count, Avg
+    try:
+        from ..models import ChatbotConversation, ChatMessage
+        from django.db.models import Count, Avg
+        
+        conversations = ChatbotConversation.objects.filter(user=user)
+        
+        stats = {
+            'total_conversations': conversations.count(),
+            'total_messages': ChatMessage.objects.filter(
+                conversation__user=user,
+                message_type='USER'
+            ).count(),
+            'avg_satisfaction': conversations.filter(
+                user_satisfaction__isnull=False
+            ).aggregate(avg=Avg('user_satisfaction'))['avg'] or 0,
+        }
+        
+        return stats
     
-    conversations = ChatbotConversation.objects.filter(user=user)
-    
-    stats = {
-        'total_conversations': conversations.count(),
-        'total_messages': ChatMessage.objects.filter(
-            conversation__user=user,
-            message_type='USER'
-        ).count(),
-        'avg_satisfaction': conversations.filter(
-            user_satisfaction__isnull=False
-        ).aggregate(avg=Avg('user_satisfaction'))['avg'] or 0,
-    }
-    
-    return stats
+    except Exception as e:
+        logger.error(f"Error in chatbot_stats_summary: {e}")
+        return {
+            'total_conversations': 0,
+            'total_messages': 0,
+            'avg_satisfaction': 0,
+        }
