@@ -1,0 +1,17 @@
+Django
+psycopg2-binary
+psycopg2
+dj-database-url
+gunicorn
+python-decouple
+Pillow
+whitenoise
+requests
+asgiref
+sqlparse
+tzdata
+certifi
+charset-normalizer
+idna
+urllib3
+pyclamd
