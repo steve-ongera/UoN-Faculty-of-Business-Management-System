@@ -11061,3 +11061,1371 @@ def error_404_view(request, exception):
 
 def error_500_view(request):
     return render(request, 'errors/500.html', status=500)
+
+
+# views.py
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from django.db.models import Q, Count, Avg, Max
+from django.core.paginator import Paginator
+import json
+from datetime import datetime, timedelta
+import uuid
+
+from .models import (
+    ChatbotConversation, ChatMessage, MentalHealthAssessment,
+    ChatbotKnowledgeBase, ChatbotFeedback, CrisisAlert,
+    ChatbotAnalytics, Student, User, AuditLog
+)
+
+
+# ========================
+# MAIN CHATBOT VIEWS
+# ========================
+
+@login_required
+@require_http_methods(["POST"])
+def chatbot_send_message(request):
+    """
+    Handle incoming messages from users and generate AI responses
+    """
+    try:
+        data = json.loads(request.body)
+        message_content = data.get('message', '').strip()
+        conversation_id = data.get('conversation_id')
+        
+        if not message_content:
+            return JsonResponse({
+                'success': False,
+                'error': 'Message content cannot be empty'
+            }, status=400)
+        
+        # Get or create conversation
+        if conversation_id:
+            conversation = get_object_or_404(
+                ChatbotConversation, 
+                conversation_id=conversation_id,
+                user=request.user
+            )
+        else:
+            # Create new conversation
+            conversation = ChatbotConversation.objects.create(
+                user=request.user,
+                student=getattr(request.user, 'student_profile', None),
+                ip_address=get_client_ip(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            )
+        
+        # Save user message
+        user_message = ChatMessage.objects.create(
+            conversation=conversation,
+            message_type='USER',
+            content=message_content,
+        )
+        
+        # Analyze sentiment
+        sentiment_data = analyze_sentiment(message_content)
+        user_message.sentiment = sentiment_data['sentiment']
+        user_message.sentiment_score = sentiment_data['score']
+        user_message.emotion_scores = sentiment_data['emotions']
+        
+        # Detect crisis keywords
+        crisis_data = detect_crisis(message_content)
+        user_message.is_crisis = crisis_data['is_crisis']
+        user_message.crisis_keywords = crisis_data['keywords']
+        user_message.crisis_level = crisis_data['level']
+        user_message.save()
+        
+        # Handle crisis if detected
+        if crisis_data['is_crisis']:
+            handle_crisis_situation(conversation, user_message, crisis_data)
+        
+        # Classify intent and generate response
+        intent_data = classify_intent(message_content, request.user)
+        response_content = generate_response(
+            message_content, 
+            intent_data, 
+            conversation, 
+            request.user
+        )
+        
+        # Save AI response
+        ai_message = ChatMessage.objects.create(
+            conversation=conversation,
+            message_type='AI',
+            content=response_content['text'],
+            processed_content=message_content,
+            intent_detected=intent_data['intent'],
+            entities_extracted=intent_data['entities'],
+            confidence_score=intent_data['confidence'],
+            sentiment='NEUTRAL',
+            model_used='Custom_GPT_Model',
+            response_time_seconds=response_content.get('response_time', 0.5),
+        )
+        
+        # Update conversation metadata
+        conversation.total_messages += 2
+        conversation.user_messages += 1
+        conversation.ai_responses += 1
+        conversation.last_message_at = timezone.now()
+        
+        # Update conversation type if not set
+        if conversation.conversation_type == 'GENERAL':
+            conversation.conversation_type = intent_data.get('category', 'GENERAL')
+        
+        # Auto-generate title from first message
+        if not conversation.title and conversation.total_messages <= 2:
+            conversation.title = message_content[:100]
+        
+        conversation.save()
+        
+        # Update analytics
+        update_chatbot_analytics()
+        
+        return JsonResponse({
+            'success': True,
+            'conversation_id': str(conversation.conversation_id),
+            'user_message': {
+                'id': str(user_message.message_id),
+                'content': user_message.content,
+                'timestamp': user_message.created_at.isoformat(),
+                'sentiment': user_message.sentiment,
+            },
+            'ai_message': {
+                'id': str(ai_message.message_id),
+                'content': ai_message.content,
+                'timestamp': ai_message.created_at.isoformat(),
+                'intent': ai_message.intent_detected,
+                'confidence': float(ai_message.confidence_score) if ai_message.confidence_score else 0,
+            },
+            'is_crisis': crisis_data['is_crisis'],
+            'crisis_resources': get_crisis_resources() if crisis_data['is_crisis'] else None,
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def chatbot_get_conversation(request, conversation_id):
+    """
+    Get conversation history
+    """
+    try:
+        conversation = get_object_or_404(
+            ChatbotConversation,
+            conversation_id=conversation_id,
+            user=request.user
+        )
+        
+        messages = conversation.messages.all().order_by('created_at')
+        
+        messages_data = []
+        for msg in messages:
+            messages_data.append({
+                'id': str(msg.message_id),
+                'type': msg.message_type,
+                'content': msg.content,
+                'timestamp': msg.created_at.isoformat(),
+                'sentiment': msg.sentiment,
+                'is_crisis': msg.is_crisis,
+                'was_helpful': msg.was_helpful,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'conversation': {
+                'id': str(conversation.conversation_id),
+                'type': conversation.conversation_type,
+                'title': conversation.title,
+                'status': conversation.status,
+                'started_at': conversation.started_at.isoformat(),
+                'messages': messages_data,
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def chatbot_get_conversations(request):
+    """
+    Get all conversations for current user
+    """
+    try:
+        conversations = ChatbotConversation.objects.filter(
+            user=request.user
+        ).order_by('-last_message_at')[:20]
+        
+        conversations_data = []
+        for conv in conversations:
+            last_message = conv.messages.order_by('-created_at').first()
+            
+            conversations_data.append({
+                'id': str(conv.conversation_id),
+                'type': conv.conversation_type,
+                'title': conv.title or 'New Conversation',
+                'status': conv.status,
+                'last_message': last_message.content[:100] if last_message else '',
+                'last_message_at': conv.last_message_at.isoformat(),
+                'total_messages': conv.total_messages,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'conversations': conversations_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def chatbot_new_conversation(request):
+    """
+    Start a new conversation
+    """
+    try:
+        conversation = ChatbotConversation.objects.create(
+            user=request.user,
+            student=getattr(request.user, 'student_profile', None),
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
+        
+        # Send welcome message
+        welcome_message = ChatMessage.objects.create(
+            conversation=conversation,
+            message_type='AI',
+            content=get_welcome_message(request.user),
+            intent_detected='GREETING',
+            confidence_score=1.0,
+        )
+        
+        conversation.total_messages = 1
+        conversation.ai_responses = 1
+        conversation.save()
+        
+        return JsonResponse({
+            'success': True,
+            'conversation_id': str(conversation.conversation_id),
+            'welcome_message': {
+                'id': str(welcome_message.message_id),
+                'content': welcome_message.content,
+                'timestamp': welcome_message.created_at.isoformat(),
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def chatbot_close_conversation(request, conversation_id):
+    """
+    Close a conversation
+    """
+    try:
+        conversation = get_object_or_404(
+            ChatbotConversation,
+            conversation_id=conversation_id,
+            user=request.user
+        )
+        
+        conversation.close_conversation()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Conversation closed successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def chatbot_rate_message(request):
+    """
+    Rate a chatbot message as helpful or not
+    """
+    try:
+        data = json.loads(request.body)
+        message_id = data.get('message_id')
+        was_helpful = data.get('was_helpful')
+        feedback_text = data.get('feedback', '')
+        
+        message = get_object_or_404(
+            ChatMessage,
+            message_id=message_id,
+            conversation__user=request.user
+        )
+        
+        message.was_helpful = was_helpful
+        message.feedback_text = feedback_text
+        message.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Feedback recorded successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def chatbot_submit_feedback(request):
+    """
+    Submit detailed feedback about chatbot experience
+    """
+    try:
+        data = json.loads(request.body)
+        conversation_id = data.get('conversation_id')
+        rating = data.get('rating')
+        comment = data.get('comment', '')
+        what_worked = data.get('what_worked', '')
+        what_needs_improvement = data.get('what_needs_improvement', '')
+        
+        conversation = get_object_or_404(
+            ChatbotConversation,
+            conversation_id=conversation_id,
+            user=request.user
+        )
+        
+        # Update conversation satisfaction
+        conversation.user_satisfaction = rating
+        conversation.user_feedback = comment
+        conversation.save()
+        
+        # Create feedback record
+        feedback = ChatbotFeedback.objects.create(
+            conversation=conversation,
+            feedback_type='RATING',
+            rating=rating,
+            comment=comment,
+            what_worked=what_worked,
+            what_needs_improvement=what_needs_improvement,
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Thank you for your feedback!'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+# ========================
+# MENTAL HEALTH FEATURES
+# ========================
+
+@login_required
+@require_http_methods(["POST"])
+def chatbot_mental_health_assessment(request):
+    """
+    Conduct a mental health assessment
+    """
+    try:
+        data = json.loads(request.body)
+        assessment_type = data.get('assessment_type')
+        responses = data.get('responses')
+        conversation_id = data.get('conversation_id')
+        
+        if not hasattr(request.user, 'student_profile'):
+            return JsonResponse({
+                'success': False,
+                'error': 'Only students can take assessments'
+            }, status=403)
+        
+        conversation = None
+        if conversation_id:
+            conversation = get_object_or_404(
+                ChatbotConversation,
+                conversation_id=conversation_id,
+                user=request.user
+            )
+        
+        # Calculate assessment score
+        score_data = calculate_assessment_score(assessment_type, responses)
+        
+        # Create assessment record
+        assessment = MentalHealthAssessment.objects.create(
+            student=request.user.student_profile,
+            conversation=conversation,
+            assessment_type=assessment_type,
+            score=score_data['score'],
+            max_score=score_data['max_score'],
+            risk_level=score_data['risk_level'],
+            responses=responses,
+            interpretation=score_data['interpretation'],
+            recommendations=score_data['recommendations'],
+            requires_followup=score_data['requires_followup'],
+            professional_referral_recommended=score_data['referral_recommended'],
+        )
+        
+        # Handle high-risk situations
+        if score_data['risk_level'] in ['SEVERE', 'CRITICAL']:
+            # Send alerts to appropriate staff
+            send_mental_health_alert(assessment)
+        
+        return JsonResponse({
+            'success': True,
+            'assessment': {
+                'id': str(assessment.assessment_id),
+                'score': assessment.score,
+                'max_score': assessment.max_score,
+                'risk_level': assessment.risk_level,
+                'interpretation': assessment.interpretation,
+                'recommendations': assessment.recommendations,
+                'requires_followup': assessment.requires_followup,
+                'professional_referral': assessment.professional_referral_recommended,
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+# ========================
+# ADMIN/STAFF VIEWS
+# ========================
+
+@login_required
+def chatbot_dashboard(request):
+    """
+    Admin dashboard for chatbot analytics
+    """
+    if request.user.user_type not in ['DEAN', 'COD', 'ICT_ADMIN']:
+        return JsonResponse({
+            'success': False,
+            'error': 'Unauthorized'
+        }, status=403)
+    
+    # Get recent analytics
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+    
+    recent_analytics = ChatbotAnalytics.objects.filter(
+        date__gte=week_ago
+    ).order_by('-date')
+    
+    # Active crisis alerts
+    active_crises = CrisisAlert.objects.filter(
+        status__in=['DETECTED', 'NOTIFIED', 'IN_PROGRESS']
+    ).select_related('student', 'conversation')
+    
+    # Recent conversations requiring attention
+    escalated_conversations = ChatbotConversation.objects.filter(
+        status='ESCALATED',
+        escalated=True
+    ).order_by('-escalated_at')[:10]
+    
+    # High-risk assessments
+    high_risk_assessments = MentalHealthAssessment.objects.filter(
+        risk_level__in=['SEVERE', 'CRITICAL'],
+        assessed_at__gte=timezone.now() - timedelta(days=30)
+    ).order_by('-assessed_at')
+    
+    context = {
+        'analytics': recent_analytics,
+        'active_crises': active_crises,
+        'escalated_conversations': escalated_conversations,
+        'high_risk_assessments': high_risk_assessments,
+        'total_conversations_today': ChatbotConversation.objects.filter(
+            started_at__date=today
+        ).count(),
+        'total_messages_today': ChatMessage.objects.filter(
+            created_at__date=today
+        ).count(),
+    }
+    
+    return render(request, 'chatbot/dashboard.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def chatbot_crisis_alerts(request):
+    """
+    Get active crisis alerts (for staff)
+    """
+    if request.user.user_type not in ['DEAN', 'COD', 'ICT_ADMIN']:
+        return JsonResponse({
+            'success': False,
+            'error': 'Unauthorized'
+        }, status=403)
+    
+    alerts = CrisisAlert.objects.filter(
+        status__in=['DETECTED', 'NOTIFIED', 'IN_PROGRESS']
+    ).select_related('student', 'conversation').order_by('-detected_at')
+    
+    alerts_data = []
+    for alert in alerts:
+        alerts_data.append({
+            'id': str(alert.alert_id),
+            'student': {
+                'reg_number': alert.student.registration_number,
+                'name': f"{alert.student.first_name} {alert.student.last_name}",
+            },
+            'crisis_type': alert.crisis_type,
+            'severity': alert.severity,
+            'status': alert.status,
+            'detected_at': alert.detected_at.isoformat(),
+            'confidence': float(alert.confidence),
+        })
+    
+    return JsonResponse({
+        'success': True,
+        'alerts': alerts_data
+    })
+
+
+# ========================
+# UTILITY FUNCTIONS
+# ========================
+
+def get_client_ip(request):
+    """Extract client IP from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
+def get_welcome_message(user):
+    """Generate personalized welcome message"""
+    if hasattr(user, 'student_profile'):
+        student = user.student_profile
+        return f"Hello {student.first_name}! 👋 I'm your Faculty of Business AI Assistant. How can I help you today? I can assist with:\n\n• Academic information\n• Registration guidance\n• Timetable queries\n• Mental health support\n• General inquiries"
+    else:
+        return f"Hello {user.get_full_name()}! 👋 I'm the Faculty of Business AI Assistant. How may I assist you today?"
+
+
+def analyze_sentiment(text):
+    """
+    Analyze sentiment of text
+    Simple implementation - replace with actual NLP model
+    """
+    text_lower = text.lower()
+    
+    # Crisis keywords
+    crisis_words = ['suicide', 'kill myself', 'end it all', 'want to die', 'self harm']
+    anxiety_words = ['anxious', 'worried', 'stressed', 'panic', 'overwhelmed']
+    depression_words = ['depressed', 'sad', 'hopeless', 'worthless', 'empty']
+    positive_words = ['happy', 'great', 'excellent', 'good', 'thanks', 'helpful']
+    
+    if any(word in text_lower for word in crisis_words):
+        return {
+            'sentiment': 'CRISIS',
+            'score': -1.0,
+            'emotions': {'crisis': 1.0}
+        }
+    elif any(word in text_lower for word in anxiety_words):
+        return {
+            'sentiment': 'ANXIOUS',
+            'score': -0.5,
+            'emotions': {'anxiety': 0.7}
+        }
+    elif any(word in text_lower for word in depression_words):
+        return {
+            'sentiment': 'DEPRESSED',
+            'score': -0.7,
+            'emotions': {'depression': 0.8}
+        }
+    elif any(word in text_lower for word in positive_words):
+        return {
+            'sentiment': 'POSITIVE',
+            'score': 0.8,
+            'emotions': {'joy': 0.7}
+        }
+    else:
+        return {
+            'sentiment': 'NEUTRAL',
+            'score': 0.0,
+            'emotions': {}
+        }
+
+
+def detect_crisis(text):
+    """
+    Detect crisis situations in text
+    """
+    text_lower = text.lower()
+    
+    critical_keywords = [
+        'suicide', 'kill myself', 'end my life', 'want to die',
+        'better off dead', 'end it all'
+    ]
+    
+    high_keywords = [
+        'self harm', 'hurt myself', 'cut myself', 'overdose'
+    ]
+    
+    medium_keywords = [
+        'can\'t go on', 'no point', 'give up', 'hopeless'
+    ]
+    
+    detected_keywords = []
+    level = 'NONE'
+    is_crisis = False
+    
+    for keyword in critical_keywords:
+        if keyword in text_lower:
+            detected_keywords.append(keyword)
+            level = 'CRITICAL'
+            is_crisis = True
+    
+    if not is_crisis:
+        for keyword in high_keywords:
+            if keyword in text_lower:
+                detected_keywords.append(keyword)
+                level = 'HIGH'
+                is_crisis = True
+    
+    if not is_crisis:
+        for keyword in medium_keywords:
+            if keyword in text_lower:
+                detected_keywords.append(keyword)
+                level = 'MEDIUM'
+    
+    return {
+        'is_crisis': is_crisis,
+        'keywords': detected_keywords,
+        'level': level
+    }
+
+
+def classify_intent(text, user):
+    """
+    Classify user intent
+    Simple rule-based implementation - replace with ML model
+    """
+    text_lower = text.lower()
+    
+    # Academic queries
+    if any(word in text_lower for word in ['unit', 'course', 'class', 'lecture', 'exam', 'assignment']):
+        return {
+            'intent': 'ACADEMIC_QUERY',
+            'category': 'ACADEMIC',
+            'confidence': 0.85,
+            'entities': []
+        }
+    
+    # Registration queries
+    if any(word in text_lower for word in ['register', 'registration', 'enroll', 'semester']):
+        return {
+            'intent': 'REGISTRATION_QUERY',
+            'category': 'REGISTRATION',
+            'confidence': 0.80,
+            'entities': []
+        }
+    
+    # Fees queries
+    if any(word in text_lower for word in ['fees', 'payment', 'receipt', 'balance', 'fee structure']):
+        return {
+            'intent': 'FEES_QUERY',
+            'category': 'FEES',
+            'confidence': 0.85,
+            'entities': []
+        }
+    
+    # Timetable queries
+    if any(word in text_lower for word in ['timetable', 'schedule', 'venue', 'room', 'time']):
+        return {
+            'intent': 'TIMETABLE_QUERY',
+            'category': 'TIMETABLE',
+            'confidence': 0.80,
+            'entities': []
+        }
+    
+    # Mental health
+    if any(word in text_lower for word in ['stress', 'anxious', 'depressed', 'mental health', 'counseling']):
+        return {
+            'intent': 'MENTAL_HEALTH_SUPPORT',
+            'category': 'MENTAL_HEALTH',
+            'confidence': 0.90,
+            'entities': []
+        }
+    
+    # Grades
+    if any(word in text_lower for word in ['grade', 'marks', 'results', 'performance', 'gpa']):
+        return {
+            'intent': 'GRADES_QUERY',
+            'category': 'ACADEMIC',
+            'confidence': 0.85,
+            'entities': []
+        }
+    
+    return {
+        'intent': 'GENERAL_QUERY',
+        'category': 'GENERAL',
+        'confidence': 0.50,
+        'entities': []
+    }
+
+
+def generate_response(message, intent_data, conversation, user):
+    """
+    Generate appropriate response based on intent
+    """
+    intent = intent_data['intent']
+    
+    responses = {
+        'ACADEMIC_QUERY': "I can help you with academic information. Could you please be more specific? For example:\n• What units are you taking this semester?\n• Information about a specific unit\n• Assignment or exam schedules",
+        
+        'REGISTRATION_QUERY': "I can help you with registration. Here's what you need to know:\n• Registration is done at the beginning of each semester\n• You need to clear your fees to register\n• You can register for your year-level units\n\nWould you like specific information about your current registration status?",
+        
+        'FEES_QUERY': "I can help with fees-related queries. I can provide information about:\n• Fee structure for your programme\n• Payment methods\n• Fee balance\n• Receipt verification\n\nWhat would you like to know?",
+        
+        'TIMETABLE_QUERY': "I can help you view your class timetable. Your timetable shows:\n• Lecture times and venues\n• Lecturers for each unit\n• Days and times for all classes\n\nWould you like to see your current timetable?",
+        
+        'MENTAL_HEALTH_SUPPORT': "I'm here to support you. It's important to talk about what you're feeling. Our university offers:\n• Professional counseling services\n• Mental health assessments\n• Peer support groups\n• Crisis intervention\n\nWould you like to:\n1. Take a mental health assessment\n2. Get counseling resources\n3. Talk about what you're experiencing",
+        
+        'GRADES_QUERY': "I can help you check your academic performance. I can show you:\n• Current semester grades\n• Overall GPA\n• Unit-specific performance\n• Academic standing\n\nWhat would you like to know about your grades?",
+        
+        'GENERAL_QUERY': "I'm here to help! I can assist you with:\n• Academic information\n• Registration and enrollment\n• Fees and payments\n• Timetables\n• Grades and performance\n• Mental health support\n• General faculty information\n\nWhat would you like to know more about?",
+    }
+    
+    response_text = responses.get(intent, responses['GENERAL_QUERY'])
+    
+    # Try to fetch from knowledge base
+    kb_entry = ChatbotKnowledgeBase.objects.filter(
+        category=intent_data['category'],
+        is_active=True
+    ).first()
+    
+    if kb_entry:
+        response_text = kb_entry.answer
+        kb_entry.times_used += 1
+        kb_entry.save()
+    
+    return {
+        'text': response_text,
+        'response_time': 0.5,
+        'source': 'knowledge_base' if kb_entry else 'default'
+    }
+
+
+def handle_crisis_situation(conversation, message, crisis_data):
+    """
+    Handle detected crisis situations
+    """
+    if not hasattr(conversation.user, 'student_profile'):
+        return
+    
+    # Determine crisis type
+    crisis_type = 'EMERGENCY'
+    if any(word in crisis_data['keywords'] for word in ['suicide', 'kill myself', 'end my life']):
+        crisis_type = 'SUICIDE'
+    elif any(word in crisis_data['keywords'] for word in ['self harm', 'hurt myself', 'cut myself']):
+        crisis_type = 'SELF_HARM'
+    elif any(word in crisis_data['keywords'] for word in ['depressed', 'hopeless', 'worthless']):
+        crisis_type = 'SEVERE_DEPRESSION'
+    
+    # Create crisis alert
+    alert = CrisisAlert.objects.create(
+        student=conversation.user.student_profile,
+        conversation=conversation,
+        message=message,
+        crisis_type=crisis_type,
+        severity=crisis_data['level'],
+        detected_keywords=crisis_data['keywords'],
+        confidence=0.95,
+        auto_response_sent=True,
+        auto_response_text=get_crisis_response(crisis_type),
+    )
+    
+    # Send immediate automated response
+    crisis_response = ChatMessage.objects.create(
+        conversation=conversation,
+        message_type='SYSTEM',
+        content=get_crisis_response(crisis_type),
+        is_crisis=True,
+    )
+    
+    # Notify appropriate staff
+    notify_crisis_staff(alert)
+    
+    # Update conversation
+    conversation.overall_sentiment = 'CRISIS'
+    conversation.escalated = True
+    conversation.escalated_at = timezone.now()
+    conversation.escalation_reason = f"Crisis detected: {crisis_type}"
+    conversation.save()
+
+
+def get_crisis_response(crisis_type):
+    """
+    Get appropriate crisis response
+    """
+    responses = {
+        'SUICIDE': """🆘 I'm very concerned about you. Your life matters and help is available.
+
+**Immediate Support:**
+• Emergency: 999 or 112
+• Kenya Red Cross: 1199
+• Befrienders Kenya: +254 722 178 177
+
+**Campus Support:**
+• University Counseling Center: Available 24/7
+• Dean of Students: [Contact]
+• Security: [Contact]
+
+Please reach out to one of these resources immediately. You don't have to face this alone. I've also alerted our campus support team who will reach out to you shortly.
+
+Would you like me to connect you with a counselor right now?""",
+
+        'SELF_HARM': """I'm worried about you. Self-harm is often a sign that you're experiencing difficult emotions.
+
+**You can talk to:**
+• University Counseling Center
+• Student Wellness Office
+• Trusted faculty member
+
+**Helplines:**
+• Kenya Red Cross: 1199
+• Befrienders Kenya: +254 722 178 177
+
+I've notified our student support team. Someone will reach out to you soon. In the meantime, please consider reaching out to one of the resources above.
+
+Would you like to talk more about what you're experiencing?""",
+
+        'SEVERE_DEPRESSION': """I hear that you're going through a really difficult time. Depression is treatable, and you deserve support.
+
+**Campus Resources:**
+• Counseling Services: [Contact]
+• Student Health Center
+• Peer Support Groups
+
+**Professional Help:**
+• Kenya Mental Health Helpline: +254 722 178 177
+
+I've connected you with our student support services. Would you like to:
+1. Schedule a counseling session
+2. Take a mental health assessment
+3. Learn about support groups""",
+
+        'EMERGENCY': """I'm concerned about your wellbeing. Help is available:
+
+**Emergency Contacts:**
+• Emergency Services: 999/112
+• Kenya Red Cross: 1199
+• Campus Security: [Contact]
+
+**Student Support:**
+• Counseling Center: [Contact]
+• Dean of Students: [Contact]
+
+Someone from our support team will contact you shortly. Please don't hesitate to reach out to these resources.
+
+Are you in immediate danger? If yes, please call 999 immediately."""
+    }
+    
+    return responses.get(crisis_type, responses['EMERGENCY'])
+
+
+def get_crisis_resources():
+    """
+    Get crisis resources to send with response
+    """
+    return {
+        'emergency_numbers': [
+            {'name': 'Emergency Services', 'number': '999'},
+            {'name': 'Kenya Red Cross', 'number': '1199'},
+            {'name': 'Befrienders Kenya', 'number': '+254 722 178 177'},
+        ],
+        'campus_resources': [
+            {'name': 'University Counseling Center', 'available': '24/7'},
+            {'name': 'Dean of Students Office', 'available': 'Mon-Fri 8AM-5PM'},
+            {'name': 'Campus Security', 'available': '24/7'},
+        ],
+        'online_resources': [
+            {'name': 'Mental Health Kenya', 'url': 'https://mentalhealthkenya.org'},
+            {'name': 'KEMRI Wellcome Trust', 'url': 'https://kemri-wellcome.org'},
+        ]
+    }
+
+
+def notify_crisis_staff(alert):
+    """
+    Notify appropriate staff about crisis alert
+    """
+    # Get Dean, COD, and relevant staff
+    staff_to_notify = User.objects.filter(
+        user_type__in=['DEAN', 'COD', 'ICT_ADMIN'],
+        is_active=True
+    )
+    
+    alert.authorities_notified = True
+    alert.notification_sent_at = timezone.now()
+    alert.save()
+    
+    # Add notified users
+    alert.notified_users.set(staff_to_notify)
+    
+    # TODO: Send actual email/SMS notifications
+    # send_crisis_email_notification(alert, staff_to_notify)
+    # send_crisis_sms_notification(alert)
+
+
+def send_mental_health_alert(assessment):
+    """
+    Send alert for high-risk mental health assessment
+    """
+    staff_to_notify = User.objects.filter(
+        user_type__in=['DEAN', 'COD'],
+        is_active=True
+    )
+    
+    # TODO: Send notifications
+    # send_assessment_alert_email(assessment, staff_to_notify)
+
+
+def calculate_assessment_score(assessment_type, responses):
+    """
+    Calculate mental health assessment score
+    """
+    if assessment_type == 'PHQ9':
+        # PHQ-9 Depression Screening
+        score = sum(responses.values())
+        max_score = 27
+        
+        if score <= 4:
+            risk_level = 'MINIMAL'
+            interpretation = "Minimal or no depression"
+            recommendations = "Continue with regular self-care practices."
+            requires_followup = False
+            referral_recommended = False
+        elif score <= 9:
+            risk_level = 'MILD'
+            interpretation = "Mild depression"
+            recommendations = "Consider lifestyle changes, self-help resources, and monitoring."
+            requires_followup = True
+            referral_recommended = False
+        elif score <= 14:
+            risk_level = 'MODERATE'
+            interpretation = "Moderate depression"
+            recommendations = "Professional counseling recommended. Consider treatment options."
+            requires_followup = True
+            referral_recommended = True
+        elif score <= 19:
+            risk_level = 'SEVERE'
+            interpretation = "Moderately severe depression"
+            recommendations = "Professional treatment strongly recommended. Immediate counseling needed."
+            requires_followup = True
+            referral_recommended = True
+        else:
+            risk_level = 'CRITICAL'
+            interpretation = "Severe depression"
+            recommendations = "Immediate professional intervention required. Please seek help urgently."
+            requires_followup = True
+            referral_recommended = True
+    
+    elif assessment_type == 'GAD7':
+        # GAD-7 Anxiety Screening
+        score = sum(responses.values())
+        max_score = 21
+        
+        if score <= 4:
+            risk_level = 'MINIMAL'
+            interpretation = "Minimal anxiety"
+            recommendations = "Continue normal activities and self-care."
+            requires_followup = False
+            referral_recommended = False
+        elif score <= 9:
+            risk_level = 'MILD'
+            interpretation = "Mild anxiety"
+            recommendations = "Practice relaxation techniques and stress management."
+            requires_followup = True
+            referral_recommended = False
+        elif score <= 14:
+            risk_level = 'MODERATE'
+            interpretation = "Moderate anxiety"
+            recommendations = "Consider counseling and anxiety management strategies."
+            requires_followup = True
+            referral_recommended = True
+        else:
+            risk_level = 'SEVERE'
+            interpretation = "Severe anxiety"
+            recommendations = "Professional treatment recommended. Please seek help soon."
+            requires_followup = True
+            referral_recommended = True
+    
+    elif assessment_type == 'STRESS':
+        # General Stress Assessment
+        score = sum(responses.values())
+        max_score = 40
+        
+        if score <= 10:
+            risk_level = 'MINIMAL'
+            interpretation = "Low stress levels"
+            recommendations = "You're managing stress well. Keep up good habits."
+            requires_followup = False
+            referral_recommended = False
+        elif score <= 20:
+            risk_level = 'MILD'
+            interpretation = "Mild stress"
+            recommendations = "Practice stress management techniques regularly."
+            requires_followup = False
+            referral_recommended = False
+        elif score <= 30:
+            risk_level = 'MODERATE'
+            interpretation = "Moderate stress"
+            recommendations = "Consider talking to a counselor about stress management."
+            requires_followup = True
+            referral_recommended = True
+        else:
+            risk_level = 'SEVERE'
+            interpretation = "High stress levels"
+            recommendations = "Professional support recommended to manage stress effectively."
+            requires_followup = True
+            referral_recommended = True
+    
+    else:
+        # Default/Wellbeing assessment
+        score = sum(responses.values())
+        max_score = 50
+        risk_level = 'MILD'
+        interpretation = "Assessment completed"
+        recommendations = "Thank you for completing the assessment."
+        requires_followup = False
+        referral_recommended = False
+    
+    return {
+        'score': score,
+        'max_score': max_score,
+        'risk_level': risk_level,
+        'interpretation': interpretation,
+        'recommendations': recommendations,
+        'requires_followup': requires_followup,
+        'referral_recommended': referral_recommended,
+    }
+
+
+def update_chatbot_analytics():
+    """
+    Update daily analytics
+    """
+    today = timezone.now().date()
+    
+    analytics, created = ChatbotAnalytics.objects.get_or_create(
+        date=today,
+        defaults={
+            'total_conversations': 0,
+            'total_messages': 0,
+            'unique_users': 0,
+        }
+    )
+    
+    # Count today's data
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    analytics.total_conversations = ChatbotConversation.objects.filter(
+        started_at__gte=today_start
+    ).count()
+    
+    analytics.total_messages = ChatMessage.objects.filter(
+        created_at__gte=today_start
+    ).count()
+    
+    analytics.unique_users = ChatbotConversation.objects.filter(
+        started_at__gte=today_start
+    ).values('user').distinct().count()
+    
+    # Count by conversation type
+    analytics.academic_conversations = ChatbotConversation.objects.filter(
+        started_at__gte=today_start,
+        conversation_type='ACADEMIC'
+    ).count()
+    
+    analytics.mental_health_conversations = ChatbotConversation.objects.filter(
+        started_at__gte=today_start,
+        conversation_type='MENTAL_HEALTH'
+    ).count()
+    
+    analytics.general_conversations = ChatbotConversation.objects.filter(
+        started_at__gte=today_start,
+        conversation_type='GENERAL'
+    ).count()
+    
+    # Count by sentiment
+    analytics.positive_sentiment_count = ChatMessage.objects.filter(
+        created_at__gte=today_start,
+        sentiment='POSITIVE'
+    ).count()
+    
+    analytics.neutral_sentiment_count = ChatMessage.objects.filter(
+        created_at__gte=today_start,
+        sentiment='NEUTRAL'
+    ).count()
+    
+    analytics.negative_sentiment_count = ChatMessage.objects.filter(
+        created_at__gte=today_start,
+        sentiment__in=['NEGATIVE', 'ANXIOUS', 'DEPRESSED']
+    ).count()
+    
+    analytics.crisis_detected_count = ChatMessage.objects.filter(
+        created_at__gte=today_start,
+        is_crisis=True
+    ).count()
+    
+    # Calculate averages
+    conversations_today = ChatbotConversation.objects.filter(
+        started_at__gte=today_start
+    )
+    
+    if conversations_today.exists():
+        avg_response = conversations_today.aggregate(
+            avg=Avg('avg_response_time_seconds')
+        )['avg']
+        analytics.avg_response_time = avg_response or 0.0
+        
+        avg_rating = conversations_today.filter(
+            user_satisfaction__isnull=False
+        ).aggregate(avg=Avg('user_satisfaction'))['avg']
+        analytics.avg_satisfaction_rating = avg_rating
+    
+    analytics.escalated_conversations = conversations_today.filter(
+        escalated=True
+    ).count()
+    
+    analytics.save()
+
+
+# ========================
+# KNOWLEDGE BASE MANAGEMENT
+# ========================
+
+@login_required
+def chatbot_search_knowledge_base(request):
+    """
+    Search knowledge base
+    """
+    try:
+        query = request.GET.get('q', '').strip()
+        category = request.GET.get('category', '')
+        
+        if not query:
+            return JsonResponse({
+                'success': False,
+                'error': 'Search query required'
+            }, status=400)
+        
+        # Search in questions, answers, and keywords
+        kb_entries = ChatbotKnowledgeBase.objects.filter(
+            Q(question__icontains=query) |
+            Q(answer__icontains=query) |
+            Q(keywords__icontains=query),
+            is_active=True
+        )
+        
+        if category:
+            kb_entries = kb_entries.filter(category=category)
+        
+        kb_entries = kb_entries.order_by('-priority', '-helpful_count')[:10]
+        
+        results = []
+        for entry in kb_entries:
+            results.append({
+                'id': str(entry.kb_id),
+                'category': entry.category,
+                'question': entry.question,
+                'answer': entry.answer,
+                'helpful_count': entry.helpful_count,
+                'related_links': entry.related_links,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def chatbot_rate_kb_entry(request, kb_id):
+    """
+    Rate a knowledge base entry as helpful or not
+    """
+    try:
+        data = json.loads(request.body)
+        is_helpful = data.get('is_helpful')
+        
+        kb_entry = get_object_or_404(ChatbotKnowledgeBase, kb_id=kb_id)
+        
+        if is_helpful:
+            kb_entry.helpful_count += 1
+        else:
+            kb_entry.not_helpful_count += 1
+        
+        kb_entry.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Feedback recorded'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+# ========================
+# EXPORT & REPORTING
+# ========================
+
+@login_required
+def chatbot_export_conversation(request, conversation_id):
+    """
+    Export conversation as PDF/text
+    """
+    if request.user.user_type not in ['DEAN', 'COD', 'ICT_ADMIN']:
+        # Students can only export their own conversations
+        conversation = get_object_or_404(
+            ChatbotConversation,
+            conversation_id=conversation_id,
+            user=request.user
+        )
+    else:
+        conversation = get_object_or_404(
+            ChatbotConversation,
+            conversation_id=conversation_id
+        )
+    
+    messages = conversation.messages.all().order_by('created_at')
+    
+    # Create audit log
+    AuditLog.objects.create(
+        user=request.user,
+        username=request.user.username,
+        action_type='EXPORT',
+        action_description=f'Exported chatbot conversation {conversation_id}',
+        model_name='ChatbotConversation',
+        object_id=conversation.id,
+        ip_address=get_client_ip(request),
+        severity='MEDIUM'
+    )
+    
+    context = {
+        'conversation': conversation,
+        'messages': messages,
+        'exported_at': timezone.now(),
+        'exported_by': request.user,
+    }
+    
+    return render(request, 'chatbot/export_conversation.html', context)
+
+
+@login_required
+def chatbot_analytics_report(request):
+    """
+    Generate analytics report
+    """
+    if request.user.user_type not in ['DEAN', 'COD', 'ICT_ADMIN']:
+        return JsonResponse({
+            'success': False,
+            'error': 'Unauthorized'
+        }, status=403)
+    
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    
+    if start_date:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+    else:
+        start_date = timezone.now().date() - timedelta(days=30)
+    
+    if end_date:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+    else:
+        end_date = timezone.now().date()
+    
+    # Get analytics data
+    analytics_data = ChatbotAnalytics.objects.filter(
+        date__gte=start_date,
+        date__lte=end_date
+    ).order_by('date')
+    
+    # Aggregate statistics
+    total_conversations = sum(a.total_conversations for a in analytics_data)
+    total_messages = sum(a.total_messages for a in analytics_data)
+    avg_satisfaction = analytics_data.filter(
+        avg_satisfaction_rating__isnull=False
+    ).aggregate(avg=Avg('avg_satisfaction_rating'))['avg']
+    
+    # Crisis statistics
+    total_crises = CrisisAlert.objects.filter(
+        detected_at__date__gte=start_date,
+        detected_at__date__lte=end_date
+    ).count()
+    
+    # Mental health assessments
+    total_assessments = MentalHealthAssessment.objects.filter(
+        assessed_at__date__gte=start_date,
+        assessed_at__date__lte=end_date
+    ).count()
+    
+    high_risk_assessments = MentalHealthAssessment.objects.filter(
+        assessed_at__date__gte=start_date,
+        assessed_at__date__lte=end_date,
+        risk_level__in=['SEVERE', 'CRITICAL']
+    ).count()
+    
+    context = {
+        'start_date': start_date,
+        'end_date': end_date,
+        'analytics_data': analytics_data,
+        'total_conversations': total_conversations,
+        'total_messages': total_messages,
+        'avg_satisfaction': avg_satisfaction,
+        'total_crises': total_crises,
+        'total_assessments': total_assessments,
+        'high_risk_assessments': high_risk_assessments,
+    }
+    
+    return render(request, 'chatbot/analytics_report.html', context)
