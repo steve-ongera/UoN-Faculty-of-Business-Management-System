@@ -45,6 +45,12 @@ MIDDLEWARE = [
     'main_application.middleware.ThreadLocalMiddleware',
     'main_application.middleware.SecurityMiddleware',
     'main_application.middleware.BruteForceProtectionMiddleware',
+    # Add chatbot middleware
+    'main_application.middleware.ChatbotMiddleware',
+    'main_application.middleware.ChatbotAnalyticsMiddleware',
+    'main_application.middleware.ChatbotSecurityMiddleware',
+    'main_application.middleware.ChatbotSessionMiddleware',
+    'main_application.middleware.CrisisDetectionMiddleware',
 ]
 
 ROOT_URLCONF = 'Business_Management_System.urls'
@@ -59,6 +65,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'main_application.context_processors.chatbot_context',
             ],
         },
     },
