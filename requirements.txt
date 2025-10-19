@@ -15,3 +15,5 @@ charset-normalizer
 idna
 urllib3
 pyclamd
+openpyxl
+
