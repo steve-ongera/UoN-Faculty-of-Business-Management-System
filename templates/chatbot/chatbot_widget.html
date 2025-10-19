@@ -523,7 +523,6 @@
 .bi-pencil-square::before { content: "\f5de"; }
 .bi-heart-pulse::before { content: "\f4f8"; }
 </style>
-
 <script>
 (function() {
     'use strict';
@@ -535,6 +534,45 @@
     let lastAiMessageId = null;
     let isProcessing = false;
     let isMinimized = false;
+    
+    // ============================================
+    // CSRF TOKEN HANDLING
+    // ============================================
+    function getCsrfToken() {
+        // Try multiple ways to get the CSRF token
+        let token = '';
+        
+        // 1. Try from meta tag
+        const metaToken = document.querySelector('meta[name="csrf-token"]');
+        if (metaToken) {
+            token = metaToken.getAttribute('content');
+        }
+        
+        // 2. Try from cookie (Django's default)
+        if (!token) {
+            const cookieValue = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('csrftoken='))
+                ?.split('=')[1];
+            if (cookieValue) {
+                token = cookieValue;
+            }
+        }
+        
+        // 3. Try from hidden input (Django's form method)
+        if (!token) {
+            const inputToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (inputToken) {
+                token = inputToken.value;
+            }
+        }
+        
+        if (!token) {
+            console.warn('CSRF token not found');
+        }
+        
+        return token;
+    }
     
     // ============================================
     // INITIALIZATION
@@ -699,11 +737,17 @@
     
     async function newChatbotConversation() {
         try {
+            const csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                showErrorMessage('Security token missing. Please refresh the page.');
+                return;
+            }
+            
             const response = await fetch('/chatbot/new-conversation/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken(),
+                    'X-CSRFToken': csrfToken,
                     'X-Requested-With': 'XMLHttpRequest',
                 }
             });
@@ -785,11 +829,16 @@
         showTypingIndicator();
         
         try {
+            const csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                throw new Error('CSRF token not available');
+            }
+            
             const response = await fetch('/chatbot/send-message/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken(),
+                    'X-CSRFToken': csrfToken,
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: JSON.stringify({
@@ -922,11 +971,17 @@
         if (!lastAiMessageId) return;
         
         try {
+            const csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                console.error('CSRF token not available for rating');
+                return;
+            }
+            
             await fetch('/chatbot/rate-message/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken(),
+                    'X-CSRFToken': csrfToken,
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: JSON.stringify({
@@ -1050,11 +1105,6 @@
         content = content.replace(/\n/g, '<br>');
         
         return content;
-    }
-    
-    function getCsrfToken() {
-        const token = document.querySelector('[name=csrfmiddlewaretoken]');
-        return token ? token.value : '';
     }
     
     // Make functions globally available
